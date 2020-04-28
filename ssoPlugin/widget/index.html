@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!--
+    NOTE:
+    1. You can reference the file in SDK via relative path
+    2. The Control and Widget Should NOT share resources. Only the Widget folder will make it to the device
+    3. You may include any JS framework you want with your Widget and Control folders. However, keep in mind
+        to keep you plugin as light weight as possible for performance and transport reasons
+  -->
+
+  <!-- You can load helper.css to use our helper classes.
+  <link href="../../../../styles/helper.css" rel="stylesheet">
+  -->
+
+  <!-- JS -->
+  <script src="../../../scripts/buildfire.min.js"></script>
+  <!-- <script src="https://cdn.auth0.com/js/lock/11.23.1/lock.min.js"></script> -->
+  <script src="https://cdn.auth0.com/js/auth0-spa-js/1.7/auth0-spa-js.production.js"></script>
+
+  <!--
+   <script src="../../../../scripts/angular/angular.min.js"></script>
+   <script src="../../../../scripts/angular/ui-bootstrap.min.js"></script>
+
+   <script src="../../../../scripts/jquery/jquery-1.11.2.min.js"></script>
+   -->
+</head>
+<body>
+<span>Widget - SSO</span>
+
+<!-- <script type="text/javascript">
+  buildfire.localStorage.setItem('@bif/sso', { token: "MY TOKEN" }, function(err,data){
+      if(err)
+          alert('there was a problem saving your data');
+      else
+          alert('your data has saved successfully');
+  });
+</script>
+
+ -->
+<div id="btn-login">Log In HELLOO</div>
+<!-- <script type="text/javascript">
+  var wm = new WeakMap();
+  var privateStore = {};
+  var lock = new Auth0Lock(
+    'ID_GOES_HERE',
+    'statnews.auth0.com'
+  );
+
+  lock.on("authorization_error", function(e) {
+    console.log("authorization_error")
+  })
+
+  lock.on("unrecoverable_error", function(e) {
+    console.log("unrecoverable_error")
+  })
+
+  lock.on("signin submit", function(e) {
+    console.log("signin submit")
+  })
+
+  lock.on("authenticated", function(authResult) {
+    console.log("AUTHENTICATED")
+    // Use the token in authResult to getUserInfo() and save it if necessary
+    this.getUserInfo(authResult.accessToken, function(error, profile) {
+      if (error) {
+        // Handle error
+        return;
+      }
+
+      //we recommend not storing Access Tokens unless absolutely necessary
+      wm.set(privateStore, {
+        accessToken: authResult.accessToken
+      });
+
+      wm.set(privateStore, {
+        profile: profile
+      });
+
+    });
+  });
+
+  wm.set(privateStore, {
+    appName: "BuildFire SSO Plugin Test"
+  });
+
+  document.getElementById('btn-login').addEventListener('click', function() {
+    lock.show();
+  });
+</script> -->
+
+<script type="text/javascript">
+  const auth0 = createAuth0Client({
+    domain: 'statnews.auth0.com',
+    client_id: 'ID_GOES_HERE'
+  }).then(auth0 => {
+    // either with async/await
+    document.getElementById('btn-login').addEventListener('click', async () => {
+      console.log("logging")
+      const result = await auth0.loginWithRedirect();
+      console.log("done")
+      console.log(result)
+      //logged in. you can get the user profile like this:
+      const user = await auth0.getUser();
+      console.log(user);
+    });
+  });
+</script>
+
+</body>
+</html>

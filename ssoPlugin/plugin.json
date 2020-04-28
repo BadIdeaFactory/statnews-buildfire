@@ -1,0 +1,21 @@
+{
+  "author": "Bad Idea Factory",
+  "pluginName": "SSO Management", 
+  "pluginDescription": "Allow users to sign into your application.",
+  "supportEmail": "biffuddotcom@biffud.com",
+  "control": {
+    "content": {
+      "enabled": true
+    },
+    "design": {
+      "enabled": false
+    },
+    "settings": {
+      "enabled": false
+    }
+  },
+  "widget": {
+  },
+  "features": [],
+  "languages": ["en"]
+}
