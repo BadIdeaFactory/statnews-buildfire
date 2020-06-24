@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<!-- The BuildFire JS library is required. -->
+	<script src="../../../scripts/buildfire.min.js"></script>
+	<style type="text/css">
+		#bif-rss__wrapper {
+			padding: 1em;
+		}
+
+		#bif-rss__banner {
+			background-color: #222;
+			color: white;
+			text-transform: uppercase;
+			font-size: 0.9em;
+			font-weight: 500;
+			text-align: center;
+			margin: 0;
+			padding: 0.5em;
+		}
+
+		.bif-rss__content {
+			display: none;
+		}
+		.uninitialized #bif-rss__content--uninitialized,
+		.initialized #bif-rss__content--initialized {
+			display: initial;
+		}
+
+		#bif-rss__alert-message {
+			padding: 1em;
+			background-color: #ffd;
+		}
+		#bif-rss__alert-message:empty {
+			padding: 0;
+		}
+		.bif-rss__alert-message--success {
+			color: #00b500;
+		}
+		.bif-rss__alert-message--error {
+			color: #ec0000;
+		}
+	</style>
+</head>
+<body class="uninitialized">
+
+	<div id="bif-rss__banner">Widget - RSS</div>
+
+	<div id="bif-rss__wrapper">
+		<div id="bif-rss__alert-message"></div>
+
+		<div id="bif-rss__content--uninitialized" class="bif-rss__content">
+			<p>Initializing...</p>
+		</div>
+
+		<div id="bif-rss__content--initialized" class="bif-rss__content">
+			<h4 id="bif-rss__content__title"></h4>
+			<div id="bif-rss__content__body">Loading...</div>
+		</div>
+	</div>
+
+	<script type="text/javascript">
+		// ============================================================================================
+		// UTILITY METHODS
+		// ============================================================================================
+
+		/**
+		 * Runs the provided function when the document is fully loaded.
+		 *
+		 * @param {Function} fn The function to be run.
+		 */
+		const ready = (fn) => {
+			if (document.readyState != 'loading') fn()
+			else document.addEventListener('DOMContentLoaded', fn)
+		}
+
+		const notify = (body, notificationType) => {
+			switch (notificationType) {
+				case 'error':
+					console.error(body)
+					break
+				default:
+					console.log(body)
+			}
+		}
+
+		// ============================================================================================
+		// APPLICATION METHODS
+		// ============================================================================================
+
+		// TODO: Fix CORS issues with statnews.com feed so we don't have to do… this.
+		const USE_CORS_PROXY = true
+		const CORS_PROXY = 'https://cors-anywhere.herokuapp.com/'
+
+		// Set DOM variables that we'll reference in the following methods thanks to lexical scoping.
+		const $body = document.querySelector('body')
+		const $alertMessage = document.getElementById('bif-rss__alert-message')
+		const $contentTitle = document.getElementById('bif-rss__content__title')
+		const $contentBody = document.getElementById('bif-rss__content__body')
+
+		/**
+		 * Marks the completion of initialization by changing some body classes.
+		 */
+		 const initComplete = () => {
+			$body.classList.remove('uninitialized')
+			$body.classList.add('initialized')
+		}
+
+		const areValidCredentials = (credentials) => {
+			return credentials && credentials.username && credentials.password
+		}
+
+		const isValidUser = (user) => {
+			// TODO: Expand this to not just check the validity of the object composition, but actually
+			//       ask the Auth0 API to verify the user.
+			return user && user.sub
+		}
+
+		const fetchFeed = (feedUrl) => new Promise((resolve, reject) => {
+			const convertResponseToText = (response) => response.text()
+			const parseTextAsXml = (str) => new DOMParser().parseFromString(str, 'text/xml')
+			const getItemsFromXml = (xml) => Array.from(xml.querySelectorAll('item'))
+			const renderItem = (item) => {
+				const title = item.querySelector('title').innerHTML
+				return `<li>${title}</li>`
+			}
+			const renderItems = (items) => {
+				const renderedItems = items.map(renderItem).join('')
+				$contentBody.innerHTML = `<ol>${renderedItems}</ol>`
+			}
+
+			fetch(`${USE_CORS_PROXY ? CORS_PROXY : ''}${feedUrl}`)
+				.then(convertResponseToText)
+				.then(parseTextAsXml)
+				.then(getItemsFromXml)
+				.then(renderItems)
+				.then(() => resolve(true))
+				.catch((err) => {
+					notify('Unable to fetch and/or process the feed.', 'error')
+					reject(err)
+				})
+		})
+
+		const fetchUnauthenticatedFeed = () => {
+			$contentTitle.innerHTML = 'STAT News Headlines'
+			fetchFeed('https://www.statnews.com/feed')
+		}
+
+		const fetchAuthenticatedFeed = (credentials) => {
+			$contentTitle.innerHTML = 'STAT Plus News Headlines'
+			// TODO: If the credentials are wrong, the `fetch()` will throw a 403. Need to watch for this!
+			fetchFeed(`https://www.statnews.com/feed/plus/?un=${credentials.username}&pw=${credentials.password}`)
+		}
+
+		const getUserAuthenticationData = () => new Promise((resolve, reject) => {
+			buildfire.localStorage.getItem('@bif/sso', (err, data) => {
+				if (err) {
+					notify('Could not fetch authentication data from local storage.', 'error')
+					reject('Could not fetch authentication data from local storage.')
+				}
+				else {
+					const parsedData = JSON.parse(data)
+					if (parsedData.user) resolve(parsedData.user)
+					else resolve(false)
+				}
+			})
+		})
+
+		const getAuthenticatedFeedCredentials = () => new Promise((resolve, reject) => {
+			buildfire.datastore.get('bif__rss__plus_feed_credentials', (err, data) => {
+				if (err) {
+					notify('Could not fetch authenticated feed credentials.', 'error')
+					reject(err)
+				} else {
+					const credentials = data.data
+					if (areValidCredentials(credentials)) resolve(credentials)
+					else {
+						notify('Authenticated feed credentials are not valid.', 'error')
+						reject('Authenticated feed credentials are not valid')
+					}
+				}
+			})
+		})
+
+		// ============================================================================================
+		// INIT/START
+		// ============================================================================================
+
+		ready(() => {
+			getUserAuthenticationData()
+				.then((response) => {
+					if (isValidUser(response)) {
+						getAuthenticatedFeedCredentials()
+							.then((credentials) => fetchAuthenticatedFeed(credentials))
+							.catch(() => fetchUnauthenticatedFeed())
+					}
+					else fetchUnauthenticatedFeed()
+				})
+				.catch(() => fetchUnauthenticatedFeed())
+				.finally(() => initComplete())
+		})
+	</script>
+</body>
+</html>

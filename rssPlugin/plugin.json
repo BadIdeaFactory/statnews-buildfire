@@ -1,0 +1,21 @@
+{
+  "author": "Bad Idea Factory",
+  "pluginName": "RSS Display",
+  "pluginDescription": "Render RSS content.",
+  "supportEmail": "biffuddotcom@biffud.com",
+  "control": {
+    "content": {
+      "enabled": false
+    },
+    "design": {
+      "enabled": false
+    },
+    "settings": {
+      "enabled": true
+    }
+  },
+  "widget": {
+  },
+  "features": [],
+  "languages": ["en"]
+}
