@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<!-- The BuildFire JS library is required. -->
+	<script src="../../../../scripts/buildfire.min.js"></script>
+	<style type="text/css">
+		#bif-sso__wrapper {
+			padding: 1em;
+		}
+
+		.form-control-group {
+			margin: 0.5em 0;
+		}
+		.form-control-group label {
+			font-weight: bold;
+			display: inline-block;
+			text-align: right;
+			width: 7em;
+			margin-right: 0.25em
+		}
+		.form-control-group.align-with-labels {
+			padding-left: 7.25em;
+		}
+
+		form.disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+
+		.bif-sso__auth-api-settings__alert-message--success {
+			color: #00b500;
+		}
+		.bif-sso__auth-api-settings__alert-message--error {
+			color: #ec0000;
+		}
+	</style>
+</head>
+<body>
+
+	<div id="bif-sso__wrapper">
+		<form id="bif-sso__auth-api-settings">
+			<fieldset>
+				<legend>Auth0 API Settings</legend>
+				<div class="form-control-group">
+					<label for="bif-sso__auth-api-settings__domain">Domain</label>
+					<input id="bif-sso__auth-api-settings__domain" type="text">
+				</div>
+				<div class="form-control-group">
+					<label for="bif-sso__auth-api-settings__client-id">Client ID</label>
+					<input id="bif-sso__auth-api-settings__client-id" type="text">
+				</div>
+				<div class="form-control-group align-with-labels">
+					<button type="submit">Save settings</button>
+					<span id="bif-sso__auth-api-settings__alert-message"></span>
+				</div>
+			</fieldset>
+		</form>
+	</div>
+
+	<script type="text/javascript">
+		// ============================================================================================
+		// UTILITY METHODS
+		// ============================================================================================
+
+		/**
+		 * Runs the provided function when the document is fully loaded.
+		 *
+		 * @param {Function} fn The function to be run.
+		 */
+		const ready = (fn) => {
+			if (document.readyState != 'loading') fn()
+			else document.addEventListener('DOMContentLoaded', fn)
+		}
+
+		/**
+		 * Enables the provided form element and all its form element children.
+		 *
+		 * Forms themselves can't be "disabled", so we just remove any previously-set `disabled` class.
+		 * Form element children have their `disabled` property set to `false`.
+		 *
+		 * @param {HTMLElement} $form The form element to enable.
+		 */
+		const enableForm = ($form) => {
+			const $formElements = $form.querySelectorAll('input, textarea, select, button')
+			$form.classList.remove('disabled')
+			$formElements.forEach(($el) => $el.disabled = false)
+		}
+
+		/**
+		 * Disables the provided form element and all its form element children.
+		 *
+		 * Forms themselves can't be "disabled", so we just add a `disabled` class. Form element
+		 * children actually their `disabled` property set to `true`.
+		 *
+		 * @param {HTMLElement} $form The form element to disable.
+		 */
+		const disableForm = ($form) => {
+			const $formElements = $form.querySelectorAll('input, textarea, select, button')
+			$form.classList.add('disabled')
+			$formElements.forEach(($el) => $el.disabled = true)
+		}
+
+		// ============================================================================================
+		// APPLICATION METHODS
+		// ============================================================================================
+
+		// Set DOM variables that we'll reference in the following methods thanks to lexical scoping.
+		const $apiSettingsForm = document.getElementById('bif-sso__auth-api-settings')
+		const $apiSettingsFieldDomain = document.getElementById('bif-sso__auth-api-settings__domain')
+		const $apiSettingsFieldClientId = document.getElementById('bif-sso__auth-api-settings__client-id')
+		const $apiSettingsAlertMessage = document.getElementById('bif-sso__auth-api-settings__alert-message')
+
+		/**
+		 * Updates the alert message placeholder with the provided message and type.
+		 *
+		 * Expected types are "error" or "success". Default is "notification" and has no special style.
+		 *
+		 * @param {String} message      The message that should be displayed.
+		 * @param {String} messageType? The message type, from the list above.
+		 */
+		const alertMessage = (message, messageType = 'notification') => {
+			const filteredClassNames = $apiSettingsAlertMessage.className
+				.split(' ')
+				.filter((className) => !className.startsWith('bif-sso__auth-api-settings__alert-message--'))
+			if (message) filteredClassNames.push(`bif-sso__auth-api-settings__alert-message--${messageType}`)
+			$apiSettingsAlertMessage.className = filteredClassNames.join(' ').trim()
+			$apiSettingsAlertMessage.innerHTML = message
+		}
+
+		/**
+		 * Syntactic sugar for clearing any existing alert message by setting it to blank.
+		 */
+		const clearAlertMessage = () => alertMessage('')
+
+		/**
+		 * Validates that the required settings exist and aren't falsey.
+		 *
+		 * @param {Object} settings An object containing the settings.
+		 */
+		const areValidSettings = (settings) => {
+			return settings && settings.domain && settings.clientId
+		}
+
+		/**
+		 * Prefills the settings form with the provided values, if they're set.
+		 *
+		 * @param {Object} settings An object containing the settings.
+		 */
+		const prefillSettingsForm = (settings) => {
+			$apiSettingsFieldDomain.value = settings.domain || ''
+			$apiSettingsFieldClientId.value = settings.clientId || ''
+		}
+
+		/**
+		 * Saves the settings to the remote BuildFire datastore.
+		 *
+		 * TODO: Make this a Promise, probably.
+		 *
+		 * @param {Object} settings An object containing the settings.
+		 */
+		const saveSettings = (settings) => {
+			disableForm($apiSettingsForm)
+			buildfire.datastore.save(settings, 'bif__sso__auth_api_settings', (err, status) => {
+				enableForm($apiSettingsForm)
+				if (err || !status) alertMessage('Unable to save settings', 'error')
+				else alertMessage('Settings saved!', 'success')
+			})
+		}
+
+		/**
+		 * Handler for the form submission that saves to the BuildFire datastore.
+		 *
+		 * @param {SubmitEvent} e The native submit event fired by the browser.
+		 */
+		const handleSettingsFormSubmit = (e) => {
+			// Stop the native form submission
+			e.preventDefault()
+
+			clearAlertMessage()
+
+			const settings = {
+				domain: $apiSettingsFieldDomain.value,
+				clientId: $apiSettingsFieldClientId.value,
+			}
+
+			if (areValidSettings(settings)) saveSettings(settings)
+			else alertMessage('Please provide a valid domain and client ID.', 'error')
+		}
+
+		/**
+		 * Gets the authentication API settings from the BuildFire datastore.
+		 *
+		 * Unlike the widget version, we don't validate the settings here. If they're invalid, we just
+		 * won't prefill the form; we don't need to reject the Promise because of it.
+		 *
+		 * @returns {Promise} Resolves with the settings object, rejects with an error message.
+		 */
+		const getAuthApiSettings = () => new Promise((resolve, reject) => {
+			buildfire.datastore.get('bif__sso__auth_api_settings', (err, data) => {
+				if (err) reject('Could not fetch auth API settings.')
+				else resolve(data.data)
+			})
+		})
+
+
+		// ============================================================================================
+		// INIT/START
+		// ============================================================================================
+
+		ready(() => {
+			$apiSettingsForm.addEventListener('submit', handleSettingsFormSubmit)
+
+			getAuthApiSettings()
+				.then((settings) => {
+					// If the settings are valid, we'll prefill the form. If they aren't, we don't need to do
+					// anything, because most likely they've just never been set.
+					if (areValidSettings(settings)) prefillSettingsForm(settings)
+				})
+				.catch((error) => alertMessage(error, 'error'))
+		})
+	</script>
+</body>
+</html>

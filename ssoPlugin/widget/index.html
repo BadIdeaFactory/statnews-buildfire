@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<!-- The BuildFire JS library is required. -->
+	<script src="../../../scripts/buildfire.min.js"></script>
+	<!-- The Auth0 SPA library is used for authentication negotiation. -->
+	<script src="https://cdn.auth0.com/js/auth0-spa-js/1.9/auth0-spa-js.production.js"></script>
+	<style type="text/css">
+		#bif-sso__wrapper {
+			padding: 1em;
+		}
+
+		#bif-sso__banner {
+			background-color: #222;
+			color: white;
+			text-align: center;
+			padding: 0.5em;
+			text-transform: uppercase;
+			font-size: 0.9em;
+			font-weight: 500;
+			margin: 0;
+		}
+
+		.bif-sso__content {
+			display: none;
+		}
+		.uninitialized #bif-sso__content--uninitialized,
+		.unauthenticated #bif-sso__content--unauthenticated,
+		.authenticated #bif-sso__content--authenticated {
+			display: initial;
+		}
+
+		#bif-sso__alert-message {
+			padding: 1em;
+			background-color: #ffd;
+		}
+		#bif-sso__alert-message:empty {
+			padding: 0;
+		}
+		.bif-sso__alert-message--success {
+			color: #00b500;
+		}
+		.bif-sso__alert-message--error {
+			color: #ec0000;
+		}
+	</style>
+</head>
+<body class="uninitialized">
+
+	<div id="bif-sso__banner">Widget - SSO</div>
+
+	<div id="bif-sso__wrapper">
+		<div id="bif-sso__alert-message"></div>
+
+		<div id="bif-sso__content--uninitialized" class="bif-sso__content">
+			<p>Initializing...</p>
+		</div>
+
+		<div id="bif-sso__content--unauthenticated" class="bif-sso__content">
+			<p>Click the button below to authenticate.</p>
+			<button id="bif-sso__login-button">Log In</button>
+		</div>
+
+		<div id="bif-sso__content--authenticated" class="bif-sso__content">
+			<p>Successfully authenticated!</p>
+		</div>
+	</div>
+
+	<script type="text/javascript">
+		// ============================================================================================
+		// UTILITY METHODS
+		// ============================================================================================
+
+		/**
+		 * Runs the provided function when the document is fully loaded.
+		 *
+		 * @param {Function} fn The function to be run.
+		 */
+		const ready = (fn) => {
+			if (document.readyState != 'loading') fn()
+			else document.addEventListener('DOMContentLoaded', fn)
+		}
+
+		/**
+		 * Saves the provided data object to the browser's localStorage using the BuildFire library.
+		 *
+		 * @param   {Object}  data An object containing the data to save.
+		 * @returns {Promise}      Resolves with boolean true, rejects with an error message.
+		 */
+		const saveToLocalStorage = (data) => new Promise((resolve, reject) => {
+			buildfire.localStorage.setItem('@bif/sso', data, (err, result) => {
+				if (err || !result) reject('There was a problem saving to local storage.')
+				else resolve(true)
+			})
+		})
+
+		// ============================================================================================
+		// APPLICATION METHODS
+		// ============================================================================================
+
+		// Set DOM variables that we'll reference in the following methods thanks to lexical scoping.
+		const $body = document.querySelector('body')
+		const $alertMessage = document.getElementById('bif-sso__alert-message')
+		const $loginButton = document.getElementById('bif-sso__login-button')
+
+		/**
+		 * Marks the completion of initialization by changing some body classes.
+		 */
+		const initComplete = () => {
+			$body.classList.remove('uninitialized')
+			$body.classList.add('initialized')
+		}
+
+		/**
+		 * Updates the alert message placeholder with the provided message and type.
+		 *
+		 * Expected types are "error" or "success". Default is "notification" and has no special style.
+		 *
+		 * @param {String}  message      The message that should be displayed.
+		 * @param {String} messageType? The message type, from the list above.
+		 */
+		const alertMessage = (message, messageType = 'notification') => {
+			const filteredClassNames = $alertMessage.className
+				.split(' ')
+				.filter((className) => !className.startsWith('bif-sso__alert-message--'))
+			if (message) filteredClassNames.push(`bif-sso__alert-message--${messageType}`)
+			$alertMessage.className = filteredClassNames.join(' ').trim()
+			$alertMessage.innerHTML = message
+		}
+
+		/**
+		 * Validates that the required settings exist and aren't falsey.
+		 *
+		 * @param {Object} settings An object containing the settings.
+		 */
+		const areValidSettings = (settings) => {
+			return settings && settings.domain && settings.clientId
+		}
+
+		/**
+		 * Gets and validates the authentication API settings from the BuildFire datastore.
+		 *
+		 * @returns {Promise} Resolves with the settings object, rejects with an error message.
+		 */
+		const getAuthApiSettings = () => new Promise((resolve, reject) => {
+			buildfire.datastore.get('bif__sso__auth_api_settings', (err, data) => {
+				if (err) reject('Could not fetch auth API settings.')
+				else {
+					const settings = data.data
+					if (areValidSettings(settings)) resolve(settings)
+					else reject('Fetched invalid API settings.')
+				}
+			})
+		})
+
+		/**
+		 * Checks authentication status against the Auth0 API using the provided settings object.
+		 *
+		 * @returns {Promise} Resolves with an object that contains both the isAuthenticated boolean
+		                      value and the API client object, rejects with the API error response.
+		 */
+		const checkAuthenticationStatus = (authApiSettings) => new Promise((resolve, reject) => {
+			createAuth0Client({
+				domain: authApiSettings.domain,
+				client_id: authApiSettings.clientId,
+				// cacheLocation: 'localstorage',
+			})
+				.then(auth0 => {
+					auth0.isAuthenticated()
+						.then((isAuthenticated) => resolve({ isAuthenticated, auth0 }))
+						.catch((error) => reject(error))
+				})
+				.catch((error) => reject(error))
+		})
+
+		/**
+		 * Provided an Auth0 API client, gets the active user object and stores it in localStorage.
+		 *
+		 * @returns {Promise} Resolves true, or rejects with an error message.
+		 */
+		const getAndStoreUser = (auth0) => new Promise((resolve, reject) => {
+			auth0.getUser()
+				.then((user) => {
+					saveToLocalStorage({ user })
+						.then(() => resolve(true))
+						.catch((error) => reject('There was a problem storing your authentication data.'))
+				})
+				.catch((error) => reject(error))
+		})
+
+		/**
+		 * Handles a confirmed authentication by trying to get/store the user object and then
+		 * navigating to the RSS plugin.
+		 */
+		const handleAuthenticated = (auth0) => {
+			$body.classList.remove('unauthenticated')
+
+			getAndStoreUser(auth0)
+				.then(() => {
+					$body.classList.add('authenticated')
+					goToRss()
+				})
+				.catch((error) => alertMessage(`${error} Please try again.`, 'error'))
+				.finally(() => initComplete())
+		}
+
+		/**
+		 * Handles a confirmed lack of authentication by cleaning up the DOM and binding login actions
+		 * to the login button.
+		 */
+		const handleUnauthenticated = (auth0) => {
+			initComplete()
+			$body.classList.add('unauthenticated')
+
+			$loginButton.addEventListener('click', (e) => {
+				e.preventDefault()
+
+				$loginButton.disabled = true
+
+				auth0.loginWithPopup()
+					.then(() => handleAuthenticated(auth0))
+					.catch((error) => alertMessage('There was a problem trying to log you in.', error))
+					.finally(() => $loginButton.disabled = false)
+			})
+		}
+
+		/**
+		 * Navigates the user to the RSS Plugin.
+		 *
+		 * This currently doesn't work because the BuildFire SDK throws an inscrutable error. Will fix.
+		 */
+		const goToRss = () => {
+			// TODO: Figure out:
+			//       (1) why this doesn't seem to work in the SDK, and
+			//       (2) how we can navigate reliably to the RSS Plugin.
+			// buildfire.navigation.navigateTo({
+			// 	pluginId: 'rssPlugin',
+			// 	instanceId: '',
+			// 	title: 'RSS Plugin',
+			// })
+		}
+
+		// ============================================================================================
+		// INIT/START
+		// ============================================================================================
+
+		ready(() => {
+			getAuthApiSettings()
+				.then((settings) => {
+					checkAuthenticationStatus(settings)
+						.then(({ isAuthenticated, auth0 }) => {
+							if (isAuthenticated) handleAuthenticated(auth0)
+							else handleUnauthenticated(auth0)
+						})
+						.catch((error) => {
+							initComplete()
+							alertMessage(
+								`There was a problem communicating with the authentication server. \
+								 Please try again. (Error: ${error.error_description})`,
+								'error'
+							)
+						})
+				})
+				.catch((error) => {
+					initComplete()
+					alertMessage(error, 'error')
+				})
+		})
+	</script>
+</body>
+</html>
