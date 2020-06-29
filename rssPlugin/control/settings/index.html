@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<!-- The BuildFire JS library is required. -->
+	<script src="../../../../scripts/buildfire.min.js"></script>
+	<style type="text/css">
+		#bif-rss__wrapper {
+			padding: 1em;
+		}
+
+		.form-control-group {
+			margin: 0.5em 0;
+		}
+
+		.form-control-group label {
+			font-weight: bold;
+			display: inline-block;
+			text-align: right;
+			width: 7em;
+			margin-right: 0.25em
+		}
+
+		.form-control-group.align-with-labels {
+			padding-left: 7.25em;
+		}
+
+		form.disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+
+		.bif-rss__feed-credentials__alert-message--success {
+			color: #00b500;
+		}
+		.bif-rss__feed-credentials__alert-message--error {
+			color: #ec0000;
+		}
+	</style>
+</head>
+<body>
+	<form id="bif-rss__feed-credentials">
+		<fieldset>
+			<legend>STAT Plus Feed Credentials</legend>
+			<div class="form-control-group">
+				<label for="bif-rss__feed-credentials__username">Username</label>
+				<input id="bif-rss__feed-credentials__username" type="text">
+			</div>
+			<div class="form-control-group">
+				<label for="bif-rss__feed-credentials__password">Password</label>
+				<input id="bif-rss__feed-credentials__password" type="text">
+			</div>
+			<div class="form-control-group align-with-labels">
+				<button type="submit">Save credentials</button>
+				<span id="bif-rss__feed-credentials__alert-message"></span>
+			</div>
+		</fieldset>
+	</form>
+
+	<script type="text/javascript">
+		// ============================================================================================
+		// UTILITY METHODS
+		// ============================================================================================
+
+		/**
+		 * Runs the provided function when the document is fully loaded.
+		 *
+		 * @param {Function} fn The function to be run.
+		 */
+		const ready = (fn) => {
+			if (document.readyState != 'loading') fn()
+			else document.addEventListener('DOMContentLoaded', fn)
+		}
+
+		/**
+		 * Enables the provided form element and all its form element children.
+		 *
+		 * Forms themselves can't be "disabled", so we just remove any previously-set `disabled` class.
+		 * Form element children have their `disabled` property set to `false`.
+		 *
+		 * @param {HTMLElement} $form The form element to enable.
+		 */
+		const enableForm = ($form) => {
+			const $formElements = $form.querySelectorAll('input, textarea, select, button')
+			$form.classList.remove('disabled')
+			$formElements.forEach(($el) => $el.disabled = false)
+		}
+
+		/**
+		 * Disables the provided form element and all its form element children.
+		 *
+		 * Forms themselves can't be "disabled", so we just add a `disabled` class. Form element
+		 * children actually their `disabled` property set to `true`.
+		 *
+		 * @param {HTMLElement} $form The form element to disable.
+		 */
+		const disableForm = ($form) => {
+			const $formElements = $form.querySelectorAll('input, textarea, select, button')
+			$form.classList.add('disabled')
+			$formElements.forEach(($el) => $el.disabled = true)
+		}
+
+		// ============================================================================================
+		// APPLICATION METHODS
+		// ============================================================================================
+
+		// Set DOM variables that we'll reference in the following methods thanks to lexical scoping.
+		const $feedCredentialsForm = document.getElementById('bif-rss__feed-credentials')
+		const $feedCredentialsFieldUsername = document.getElementById('bif-rss__feed-credentials__username')
+		const $feedCredentialsFieldPassword = document.getElementById('bif-rss__feed-credentials__password')
+		const $feedCredentialsAlertMessage = document.getElementById('bif-rss__feed-credentials__alert-message')
+
+		/**
+		 * Updates the alert message placeholder with the provided message and type.
+		 *
+		 * Expected types are "error" or "success". Default is "notification" and has no special style.
+		 *
+		 * @param {string}  message      The message that should be displayed.
+		 * @param {string} messageType? The message type, from the list above.
+		 */
+		const alertMessage = (message, messageType = 'notification') => {
+			const filteredClassNames = $feedCredentialsAlertMessage.className
+				.split(' ')
+				.filter((className) => !className.startsWith('bif-rss__feed-credentials__alert-message--'))
+			if (message) filteredClassNames.push(`bif-rss__feed-credentials__alert-message--${messageType}`)
+			$feedCredentialsAlertMessage.className = filteredClassNames.join(' ').trim()
+			$feedCredentialsAlertMessage.innerHTML = message
+		}
+
+		/**
+		 * Validates that the required credentials exist and aren't falsey.
+		 *
+		 * @param {Object} credentials An object containing the credentials.
+		 */
+		const areValidCredentials = (credentials) => {
+			return credentials && credentials.username && credentials.password
+		}
+
+		/**
+		 * Prefills the credentials form with the provided values, if they're set.
+		 *
+		 * @param {Object} credentials An object containing the credentials.
+		 */
+		const prefillCredentialsForm = (credentials) => {
+			$feedCredentialsFieldUsername.value = credentials.username || ''
+			$feedCredentialsFieldPassword.value = credentials.password || ''
+		}
+
+		/**
+		 * Saves the credentials to the remote BuildFire datastore.
+		 *
+		 * TODO: Make this a Promise, probably.
+		 *
+		 * @param {Object} credentials An object containing the credentials.
+		 */
+		const saveCredentials = (credentials) => {
+			disableForm($feedCredentialsForm)
+			buildfire.datastore.save(credentials, 'bif__rss__plus_feed_credentials', (err, status) => {
+				enableForm($feedCredentialsForm)
+				if (err || !status) alertMessage('Unable to save credentials', 'error')
+				else alertMessage('Credentials saved!', 'success')
+			})
+		}
+
+		/**
+		 * Handler for the form submission that saves to the BuildFire datastore.
+		 *
+		 * @param {SubmitEvent} e The native submit event fired by the browser.
+		 */
+		const handleCredentialFormSubmit = (e) => {
+			// Stop the native form submission
+			e.preventDefault()
+
+			// Clear the alert message
+			alertMessage('')
+
+			const credentials = {
+				username: $feedCredentialsFieldUsername.value,
+				password: $feedCredentialsFieldPassword.value,
+			}
+
+			if (areValidCredentials(credentials)) saveCredentials(credentials)
+			else alertMessage('Please provide a valid username and password.', 'error')
+		}
+
+		// ============================================================================================
+		// INIT/START
+		// ============================================================================================
+
+		ready(() => {
+			$feedCredentialsForm.addEventListener('submit', handleCredentialFormSubmit)
+
+			// Fetch and prefill the existing feed credentials.
+			buildfire.datastore.get('bif__rss__plus_feed_credentials', (err, data) => {
+				// An error here means interacting with BuildFire failed, not just that data doesn't exist.
+				if (err) alertMessage('Error fetching existing feed credentials from BuildFire.', 'error')
+				else if (data.data) prefillCredentialsForm(data.data)
+			})
+		})
+	</script>
+</body>
+</html>
