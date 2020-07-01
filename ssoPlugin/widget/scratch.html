@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<!-- The BuildFire JS library is required. -->
+	<script src="../../../scripts/buildfire.min.js"></script>
+	<!-- The Auth0 SPA library is used for authentication negotiation. -->
+	<script src="https://cdn.auth0.com/js/auth0-spa-js/1.9/auth0-spa-js.production.js"></script>
+	<style type="text/css">
+		#bif-sso__wrapper {
+			padding: 1em;
+		}
+
+		#bif-sso__banner {
+			background-color: #222;
+			color: white;
+			text-align: center;
+			padding: 0.5em;
+			text-transform: uppercase;
+			font-size: 0.9em;
+			font-weight: 500;
+			margin: 0;
+		}
+
+		.bif-sso__content {
+			display: none;
+		}
+		.uninitialized #bif-sso__content--uninitialized,
+		.unauthenticated #bif-sso__content--unauthenticated,
+		.authenticated #bif-sso__content--authenticated {
+			display: initial;
+		}
+
+		#bif-sso__alert-message {
+			padding: 1em;
+			background-color: #ffd;
+		}
+		#bif-sso__alert-message:empty {
+			padding: 0;
+		}
+		.bif-sso__alert-message--success {
+			color: #00b500;
+		}
+		.bif-sso__alert-message--error {
+			color: #ec0000;
+		}
+	</style>
+</head>
+<body class="uninitialized">
+
+	<div id="bif-sso__banner">Widget - SSO</div>
+
+	<div id="bif-sso__wrapper">
+		<div id="bif-sso__alert-message"></div>
+
+		<ul>
+			<!-- <li><a href="https://www.apple.com/">Apple</a></li>
+			<li><a href="https://www.statnews.com/">STAT News</a></li>
+			<li><a href="https://www.statnews.com/" target="_new">STAT News TARGET NEW</a></li>
+			<li><button id="testLinkOpen">window.location=</button></li>
+			<li><button id="testLinkWriter">write/click link</button></li> -->
+			<!-- <li><button id="testDeeplink">Fetch deeplink</button></li> -->
+			<!-- <li><button id="testLoginWithPopup">Login with popup</button></li> -->
+			<li><button id="testLoginWithRedirect">Login with redirect</button></li>
+		</ul>
+		<div id="testLinkWriterDiv"></div>
+
+		<!-- <iframe id="testiframe" width="200" height="200" style="border:1px solid purple"></iframe> -->
+
+		<div id="bif-sso__content--uninitialized" class="bif-sso__content">
+			<p>Initializing...</p>
+		</div>
+
+		<div id="bif-sso__content--unauthenticated" class="bif-sso__content">
+			<p>Click the button below to authenticate.</p>
+			<button id="bif-sso__login-button">Log In</button>
+		</div>
+
+		<div id="bif-sso__content--authenticated" class="bif-sso__content">
+			<p>Successfully authenticated!</p>
+			<button id="temp__log-out">Log out</button>
+		</div>
+
+	</div>
+
+	<script type="text/javascript">
+		// ============================================================================================
+		// UTILITY METHODS
+		// ============================================================================================
+
+		/**
+		 * Runs the provided function when the document is fully loaded.
+		 *
+		 * @param {Function} fn The function to be run.
+		 */
+		const ready = (fn) => {
+			if (document.readyState != 'loading') fn()
+			else document.addEventListener('DOMContentLoaded', fn)
+		}
+
+		/**
+		 * Saves the provided data object to the browser's localStorage using the BuildFire library.
+		 *
+		 * @param   {Object}  data An object containing the data to save.
+		 * @returns {Promise}      Resolves with boolean true, rejects with an error message.
+		 */
+		const saveToLocalStorage = (data) => new Promise((resolve, reject) => {
+			buildfire.localStorage.setItem('@bif/sso', data, (err, result) => {
+				if (err || !result) reject('There was a problem saving to local storage.')
+				else resolve(true)
+			})
+		})
+
+		/**
+		 * Saves the provided data object to the BuildFire data service.
+		 *
+		 * @param   {Object}  data An object containing the data to save.
+		 * @returns {Promise}      Resolves with boolean true, rejects with an error message.
+		 */
+		const saveData = (data) => new Promise((resolve, reject) => {
+			buildfire.appData.save(data, 'bif__sso', (err, result) => {
+				if (err || !result) reject('There was a problem saving the data.')
+				else resolve(true)
+			})
+		})
+
+		// ============================================================================================
+		// APPLICATION METHODS
+		// ============================================================================================
+
+		// let auth0
+
+		// Set DOM variables that we'll reference in the following methods thanks to lexical scoping.
+		const $body = document.querySelector('body')
+		const $alertMessage = document.getElementById('bif-sso__alert-message')
+		const $loginButton = document.getElementById('bif-sso__login-button')
+
+		/**
+		 * Marks the completion of initialization by changing some body classes.
+		 */
+		const initComplete = () => {
+			$body.classList.remove('uninitialized')
+			$body.classList.add('initialized')
+		}
+
+		/**
+		 * Updates the alert message placeholder with the provided message and type.
+		 *
+		 * Expected types are "error" or "success". Default is "notification" and has no special style.
+		 *
+		 * @param {String}  message      The message that should be displayed.
+		 * @param {String} messageType? The message type, from the list above.
+		 */
+		const alertMessage = (message, messageType = 'notification') => {
+			const filteredClassNames = $alertMessage.className
+				.split(' ')
+				.filter((className) => !className.startsWith('bif-sso__alert-message--'))
+			if (message) filteredClassNames.push(`bif-sso__alert-message--${messageType}`)
+			$alertMessage.className = filteredClassNames.join(' ').trim()
+			$alertMessage.innerHTML = message
+		}
+
+		/**
+		 * Validates that the required settings exist and aren't falsey.
+		 *
+		 * @param {Object} settings An object containing the settings.
+		 */
+		const areValidSettings = (settings) => {
+			return settings && settings.domain && settings.clientId
+		}
+
+		/**
+		 * Gets and validates the authentication API settings from the BuildFire datastore.
+		 *
+		 * @returns {Promise} Resolves with the settings object, rejects with an error message.
+		 */
+		const getAuthApiSettings = () => new Promise((resolve, reject) => {
+			buildfire.datastore.get('bif__sso__auth_api_settings', (err, data) => {
+				if (err) reject('Could not fetch auth API settings.')
+				else {
+					const settings = data.data
+					if (areValidSettings(settings)) resolve(settings)
+					else reject('Fetched invalid API settings.')
+				}
+			})
+		})
+
+		/**
+		 * Checks authentication status against the Auth0 API using the provided settings object.
+		 *
+		 * @returns {Promise} Resolves with an object that contains both the isAuthenticated boolean
+		                      value and the API client object, rejects with the API error response.
+		 */
+		const checkAuthenticationStatus = (authApiSettings) => new Promise((resolve, reject) => {
+			createAuth0Client({
+				domain: authApiSettings.domain,
+				client_id: authApiSettings.clientId,
+				// cacheLocation: 'localstorage',
+			})
+				.then(auth0 => {
+					auth0.isAuthenticated()
+						.then((isAuthenticated) => resolve({ isAuthenticated, auth0 }))
+						.catch((error) => reject(error))
+				})
+				.catch((error) => reject(error))
+		})
+
+		/**
+		 * Provided an Auth0 API client, gets the active user object and stores it in localStorage.
+		 *
+		 * @returns {Promise} Resolves true, or rejects with an error message.
+		 */
+		const getAndStoreUser = (auth0) => new Promise((resolve, reject) => {
+			console.log('getAndStoreuser')
+			auth0.getTokenSilently()
+				.then((accessToken) => {
+					console.log(`accessToken: ${accessToken}`)
+					saveData({ accessToken })
+						.then(() => resolve(true))
+						.catch((error) => reject('There was a problem storing your authentication data.'))
+				})
+				.catch((error) => reject(error))
+			// auth0.getUser()
+			// 	.then((user) => {
+			// 		saveData({ user })
+			// 			.then(() => resolve(true))
+			// 			.catch((error) => reject('There was a problem storing your authentication data.'))
+			// 	})
+			// 	.catch((error) => reject(error))
+		})
+
+		/**
+		 * Handles a confirmed authentication by trying to get/store the user object and then
+		 * navigating to the RSS plugin.
+		 */
+		const handleAuthenticated = (auth0) => {
+			$body.classList.remove('unauthenticated')
+			console.log('handleAuthenticated')
+			getAndStoreUser(auth0)
+				.then(() => {
+					$body.classList.add('authenticated')
+					goToRss()
+					document.getElementById('temp__log-out').addEventListener('click', (e) => {
+						e.preventDefault()
+						auth0.logout({
+							returnTo: window.location
+						})
+					})
+				})
+				.catch((error) => alertMessage(`${error} Please try again.`, 'error'))
+				.finally(() => initComplete())
+		}
+
+		/**
+		 * Handles a confirmed lack of authentication by cleaning up the DOM and binding login actions
+		 * to the login button.
+		 */
+		const handleUnauthenticated = (auth0) => {
+			initComplete()
+			$body.classList.add('unauthenticated')
+
+			$loginButton.addEventListener('click', (e) => {
+				e.preventDefault()
+
+				$loginButton.disabled = true
+
+				auth0.loginWithRedirect({ redirect_uri: `${window.location.origin}${window.location.pathname}` })
+					.then(() => {
+						console.log('about to handleRedirectCallback')
+						auth0.handleRedirectCallback()
+							.then((response) => {
+								console.log(response)
+								handleAuthenticated(auth0)
+							})
+							.catch((error) => console.error(error))
+
+					})
+					.catch((error) => alertMessage('There was a problem trying to log you in.', error))
+					.finally(() => $loginButton.disabled = false)
+			})
+		}
+
+		/**
+		 * Navigates the user to the RSS Plugin.
+		 *
+		 * This currently doesn't work because the BuildFire SDK throws an inscrutable error. Will fix.
+		 */
+		const goToRss = () => {
+			// TODO: Figure out:
+			//       (1) why this doesn't seem to work in the SDK, and
+			//       (2) how we can navigate reliably to the RSS Plugin.
+			buildfire.navigation.navigateTo({
+				pluginId: 'rssPlugin',
+			})
+		}
+
+		// ============================================================================================
+		// INIT/START
+		// ============================================================================================
+
+		ready(() => {
+			// const oldConsole = window.console
+			// window.console = {
+			// 	log: (message) => alertMessage(`Log: ${message}`),
+			// 	error: (message) => alertMessage(`Error: ${message}`, 'error'),
+			// 	warn: (message) => oldConsole.warn(message),
+			// 	info: (message) => oldConsole.info(message),
+			// }
+
+			// document.getElementById('testOpenPopup').addEventListener('click', (e) => {
+			// 	e.preventDefault()
+
+			// 	const width = 400
+      //   const height = 600
+      //   const left = window.screenX + (window.innerWidth - width) / 2
+      //   const top = window.screenY + (window.innerHeight - height) / 2
+			// 	const opennn = window.open('https://www.apple.com', 'auth0:authorize:popup', "left=" + left + ",top=" + top + ",width=" + width + ",height=" + height + ",resizable,scrollbars=yes,status=1")
+      //   return opennn
+			// })
+
+			// document.getElementById('testDeeplink').addEventListener('click', (e) => {
+			// 	e.preventDefault()
+			// 	console.log('about to get the deeplink')
+			// 	buildfire.deeplink.template.get((err, result) => {
+			// 		if (err) console.error(err)
+			// 		else console.log(result)
+			// 	})
+			// })
+
+			document.getElementById('testLoginWithRedirect').addEventListener('click', (e) => {
+				e.preventDefault()
+
+				const originalLocation = window.location
+
+				console.log('about to reassign window.location like a crazy person')
+				window.location = {
+					assogn: (url) => {
+						console.log('assigning window.location')
+						const $div = document.getElementById('testLinkWriterDiv')
+
+						const linkNode = document.createElement('A')
+						linkNode.setAttribute('href', url)
+						linkNode.innerHTML = 'Click me'
+						$div.appendChild(linkNode)
+
+						// const event = document.createEvent('HTMLEvents')
+						// event.initEvent('click', true, false)
+						// linkNode.dispatchEvent(event)
+					}
+				}
+				window.location.assogn('http://apple.com')
+
+				window.location = originalLocation
+			})
+
+			// document.getElementById('testLoginWithPopup').addEventListener('click', (e) => {
+			// 	e.preventDefault()
+
+			// 	alertMessage('About to create auth0')
+
+			// 	// const popup = window.open(
+			// 	// 	'',
+			// 	// 	'auth0:authorize:popup',
+			// 	// 	'left=100,top=100,width=400,height=600,resizable,scrollbars=yes,status=1'
+			// 	// )
+			// 	// console.log(`popup is ${popup} and is typeof ${typeof popup}`)
+
+			// 	// const iframe = document.getElementById('testiframe')
+			// 	// const popup = iframe.contentWindow
+
+			// 	const dummyLink = document.getElementById('dummyLink')
+			// 	const event = document.createEvent('HTMLEvents')
+			// 	event.initEvent('click', true, false)
+			// 	dummyLink.dispatchEvent(event)
+
+			// 	const popup = window.open('', 'auth0:authorize:popup')
+			// 	if (popup) console.log('Yay')
+			// 	else console.error('no popup')
+
+			// // 	createAuth0Client({
+			// // 		domain: 'dev-1dt-zksl.auth0.com',
+			// // 		client_id: 'gA2H459FJ6Ra5HLuuzib89nqfKoWaMgY',
+			// // 	})
+			// // 	.then(auth0 => {
+			// // 		alertMessage('About to login with popup…')
+			// // 		auth0.loginWithPopup({
+			// // 			// authorizeTimeoutInSeconds: 10,
+			// // 		}, {
+			// // 			// timeoutInSeconds: 10,
+			// // 			popup,
+			// // 		})
+			// // 			.then(() => {
+			// //				popup.close()
+			// // 				console.log('logged in, getting token silently...')
+			// // 				auth0.getTokenSilently().then((token) => console.log(`logged in with popup: ${token}`))
+			// // 			})
+			// // 			.catch((error) => console.error(`name: ${error.name} / message: ${error.message}`))
+			// // 	})
+			// // 	.catch(() => console.error('failed to create auth0 client'))
+			// })
+
+			// document.getElementById('testLinkOpen').addEventListener('click', (e) => {
+			// 	e.preventDefault()
+			// 	window.location = 'https://www.apple.com'
+			// })
+
+			// document.getElementById('testLinkWriter').addEventListener('click', (e) => {
+			// 	e.preventDefault()
+
+			// 	const $div = document.getElementById('testLinkWriterDiv')
+			// 	const linkNode = document.createElement('A')
+			// 	linkNode.setAttribute('href', 'https://www.apple.com')
+			// 	linkNode.innerHTML = 'Click me'
+			// 	$div.appendChild(linkNode)
+
+			// 	var event = document.createEvent('HTMLEvents')
+			// 	event.initEvent('click', true, false)
+			// 	linkNode.dispatchEvent(event)
+			// })
+
+			// checkAuthenticationStatus({
+			// 	domain: 'dev-1dt-zksl.auth0.com',
+			// 	clientId: 'gA2H459FJ6Ra5HLuuzib89nqfKoWaMgY',
+
+			// })
+			// 	.then(({ isAuthenticated, auth0 }) => {
+			// 		handleUnauthenticated(auth0)
+			// 		// if (isAuthenticated) handleAuthenticated(auth0)
+			// 		// else handleUnauthenticated(auth0)
+			// 	})
+			// 	.catch((error) => {
+			// 		initComplete()
+			// 		alertMessage(
+			// 			`There was a problem communicating with the authentication server. \
+			// 				Please try again. (Error: ${error.error_description})`,
+			// 			'error'
+			// 		)
+			// 	})
+
+			// getAuthApiSettings()
+			// 	.then((settings) => {
+			// 		checkAuthenticationStatus(settings)
+			// 			.then(({ isAuthenticated, auth0 }) => {
+			// 				handleUnauthenticated(auth0)
+			// 				// if (isAuthenticated) handleAuthenticated(auth0)
+			// 				// else handleUnauthenticated(auth0)
+			// 			})
+			// 			.catch((error) => {
+			// 				initComplete()
+			// 				alertMessage(
+			// 					`There was a problem communicating with the authentication server. \
+			// 					 Please try again. (Error: ${error.error_description})`,
+			// 					'error'
+			// 				)
+			// 			})
+			// 	})
+			// 	.catch((error) => {
+			// 		initComplete()
+			// 		alertMessage(error, 'error')
+			// 	})
+
+			// initComplete()
+			// alertMessage('Getting result...')
+			// buildfire.deeplink.template.get((err, result) => {
+			// 	alertMessage(JSON.stringify(result))
+			// })
+		})
+	</script>
+</body>
+</html>

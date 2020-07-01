@@ -53,6 +53,21 @@
 	<div id="bif-sso__wrapper">
 		<div id="bif-sso__alert-message"></div>
 
+		<ul>
+			<!-- <li><a href="https://www.apple.com/">Apple</a></li>
+			<li><a href="https://www.statnews.com/">STAT News</a></li>
+			<li><a href="https://www.statnews.com/" target="_new">STAT News TARGET NEW</a></li>
+			<li><button id="testLinkOpen">window.location=</button></li>
+			<li><button id="testLinkWriter">write/click link</button></li> -->
+			<!-- <li><button id="testDeeplink">Fetch deeplink</button></li> -->
+			<!-- <li><button id="testLoginWithPopup">Login with popup</button></li> -->
+			<li><button id="testLoginWithRedirect">Login with redirect</button></li>
+			<li><button id="testLogout">Logout</button></li>
+		</ul>
+		<div id="testLinkWriterDiv"></div>
+
+		<!-- <iframe id="testiframe" width="200" height="200" style="border:1px solid purple"></iframe> -->
+
 		<div id="bif-sso__content--uninitialized" class="bif-sso__content">
 			<p>Initializing...</p>
 		</div>
@@ -64,62 +79,40 @@
 
 		<div id="bif-sso__content--authenticated" class="bif-sso__content">
 			<p>Successfully authenticated!</p>
+			<button id="temp__log-out">Log out</button>
 		</div>
+
 	</div>
 
 	<script type="text/javascript">
-		// ============================================================================================
-		// UTILITY METHODS
-		// ============================================================================================
+		// ((window) => {
+		// 	window.location.assign('http://www.apple.com')
+		// 	window = window.originalWindow
+		// })({
+		// 	originalWindow: window,
+		// 	location: {
+		// 		assign: (url) => {
+		// 			console.log(`Assigning ${url}`)
+		// 			const $div = document.getElementById('testLinkWriterDiv')
+		// 			const linkNode = document.createElement('A')
+		// 			linkNode.setAttribute('href', url)
+		// 			linkNode.setAttribute('target', '_self')
+		// 			linkNode.innerHTML = 'Click me'
+		// 			$div.appendChild(linkNode)
+		// 			const event = document.createEvent('HTMLEvents')
+		// 			event.initEvent('click', true, false)
+		// 			linkNode.dispatchEvent(event)
+		// 		}
+		// 	}
+		// })
 
-		/**
-		 * Runs the provided function when the document is fully loaded.
-		 *
-		 * @param {Function} fn The function to be run.
-		 */
 		const ready = (fn) => {
 			if (document.readyState != 'loading') fn()
 			else document.addEventListener('DOMContentLoaded', fn)
 		}
 
-		/**
-		 * Saves the provided data object to the browser's localStorage using the BuildFire library.
-		 *
-		 * @param   {Object}  data An object containing the data to save.
-		 * @returns {Promise}      Resolves with boolean true, rejects with an error message.
-		 */
-		const saveToLocalStorage = (data) => new Promise((resolve, reject) => {
-			buildfire.localStorage.setItem('@bif/sso', data, (err, result) => {
-				if (err || !result) reject('There was a problem saving to local storage.')
-				else resolve(true)
-			})
-		})
-
-		// ============================================================================================
-		// APPLICATION METHODS
-		// ============================================================================================
-
-		// Set DOM variables that we'll reference in the following methods thanks to lexical scoping.
-		const $body = document.querySelector('body')
 		const $alertMessage = document.getElementById('bif-sso__alert-message')
-		const $loginButton = document.getElementById('bif-sso__login-button')
 
-		/**
-		 * Marks the completion of initialization by changing some body classes.
-		 */
-		const initComplete = () => {
-			$body.classList.remove('uninitialized')
-			$body.classList.add('initialized')
-		}
-
-		/**
-		 * Updates the alert message placeholder with the provided message and type.
-		 *
-		 * Expected types are "error" or "success". Default is "notification" and has no special style.
-		 *
-		 * @param {String}  message      The message that should be displayed.
-		 * @param {String} messageType? The message type, from the list above.
-		 */
 		const alertMessage = (message, messageType = 'notification') => {
 			const filteredClassNames = $alertMessage.className
 				.split(' ')
@@ -129,143 +122,84 @@
 			$alertMessage.innerHTML = message
 		}
 
-		/**
-		 * Validates that the required settings exist and aren't falsey.
-		 *
-		 * @param {Object} settings An object containing the settings.
-		 */
-		const areValidSettings = (settings) => {
-			return settings && settings.domain && settings.clientId
-		}
-
-		/**
-		 * Gets and validates the authentication API settings from the BuildFire datastore.
-		 *
-		 * @returns {Promise} Resolves with the settings object, rejects with an error message.
-		 */
-		const getAuthApiSettings = () => new Promise((resolve, reject) => {
-			buildfire.datastore.get('bif__sso__auth_api_settings', (err, data) => {
-				if (err) reject('Could not fetch auth API settings.')
-				else {
-					const settings = data.data
-					if (areValidSettings(settings)) resolve(settings)
-					else reject('Fetched invalid API settings.')
-				}
-			})
-		})
-
-		/**
-		 * Checks authentication status against the Auth0 API using the provided settings object.
-		 *
-		 * @returns {Promise} Resolves with an object that contains both the isAuthenticated boolean
-		                      value and the API client object, rejects with the API error response.
-		 */
-		const checkAuthenticationStatus = (authApiSettings) => new Promise((resolve, reject) => {
-			createAuth0Client({
-				domain: authApiSettings.domain,
-				client_id: authApiSettings.clientId,
-				// cacheLocation: 'localstorage',
-			})
-				.then(auth0 => {
-					auth0.isAuthenticated()
-						.then((isAuthenticated) => resolve({ isAuthenticated, auth0 }))
-						.catch((error) => reject(error))
-				})
-				.catch((error) => reject(error))
-		})
-
-		/**
-		 * Provided an Auth0 API client, gets the active user object and stores it in localStorage.
-		 *
-		 * @returns {Promise} Resolves true, or rejects with an error message.
-		 */
-		const getAndStoreUser = (auth0) => new Promise((resolve, reject) => {
-			auth0.getUser()
-				.then((user) => {
-					saveToLocalStorage({ user })
-						.then(() => resolve(true))
-						.catch((error) => reject('There was a problem storing your authentication data.'))
-				})
-				.catch((error) => reject(error))
-		})
-
-		/**
-		 * Handles a confirmed authentication by trying to get/store the user object and then
-		 * navigating to the RSS plugin.
-		 */
-		const handleAuthenticated = (auth0) => {
-			$body.classList.remove('unauthenticated')
-
-			getAndStoreUser(auth0)
-				.then(() => {
-					$body.classList.add('authenticated')
-					goToRss()
-				})
-				.catch((error) => alertMessage(`${error} Please try again.`, 'error'))
-				.finally(() => initComplete())
-		}
-
-		/**
-		 * Handles a confirmed lack of authentication by cleaning up the DOM and binding login actions
-		 * to the login button.
-		 */
-		const handleUnauthenticated = (auth0) => {
-			initComplete()
-			$body.classList.add('unauthenticated')
-
-			$loginButton.addEventListener('click', (e) => {
-				e.preventDefault()
-
-				$loginButton.disabled = true
-
-				auth0.loginWithPopup()
-					.then(() => handleAuthenticated(auth0))
-					.catch((error) => alertMessage('There was a problem trying to log you in.', error))
-					.finally(() => $loginButton.disabled = false)
-			})
-		}
-
-		/**
-		 * Navigates the user to the RSS Plugin.
-		 *
-		 * This currently doesn't work because the BuildFire SDK throws an inscrutable error. Will fix.
-		 */
-		const goToRss = () => {
-			// TODO: Figure out:
-			//       (1) why this doesn't seem to work in the SDK, and
-			//       (2) how we can navigate reliably to the RSS Plugin.
-			// buildfire.navigation.navigateTo({
-			// 	pluginId: 'rssPlugin',
-			// 	instanceId: '',
-			// 	title: 'RSS Plugin',
-			// })
-		}
-
-		// ============================================================================================
-		// INIT/START
-		// ============================================================================================
-
 		ready(() => {
-			getAuthApiSettings()
-				.then((settings) => {
-					checkAuthenticationStatus(settings)
-						.then(({ isAuthenticated, auth0 }) => {
-							if (isAuthenticated) handleAuthenticated(auth0)
-							else handleUnauthenticated(auth0)
-						})
-						.catch((error) => {
-							initComplete()
-							alertMessage(
-								`There was a problem communicating with the authentication server. \
-								 Please try again. (Error: ${error.error_description})`,
-								'error'
-							)
-						})
+
+			document.getElementById('testLogout').addEventListener('click', (e) => {
+				e.preventDefault()
+				createAuth0Client({
+					domain: 'dev-1dt-zksl.auth0.com',
+					client_id: 'gA2H459FJ6Ra5HLuuzib89nqfKoWaMgY',
 				})
-				.catch((error) => {
-					initComplete()
-					alertMessage(error, 'error')
+					.then(auth0 => auth0.logout({
+						returnTo: window.location.href
+					}))
+			})
+
+			const params = new URLSearchParams(window.location.search)
+			if (params.get('code') && params.get('state')) {
+				alertMessage('Yes we have code/state')
+				createAuth0Client({
+					domain: 'dev-1dt-zksl.auth0.com',
+					client_id: 'gA2H459FJ6Ra5HLuuzib89nqfKoWaMgY',
+				}).then(auth0 => {
+					alertMessage('about to handleRedirectCallback')
+					auth0.handleRedirectCallback()
+						.then((response) => {
+							auth0.getTokenSilently()
+								.then((token) => alertMessage(`Logged in with token ${token}`))
+								.catch((error) => alertMessage(error, 'error'))
+						})
+						.catch((error) => alertMessage(error, 'error'))
 				})
+			} else {
+				// Do nothing in this scope
+				((window) => {
+					alertMessage('Awaiting click.')
+					document.getElementById('testLoginWithRedirect').addEventListener('click', (e) => {
+						e.preventDefault()
+
+						alertMessage('About to createAuth0Client')
+
+						createAuth0Client({
+							domain: 'dev-1dt-zksl.auth0.com',
+							client_id: 'gA2H459FJ6Ra5HLuuzib89nqfKoWaMgY',
+						})
+							.then(auth0 => {
+								alertMessage('About to check isAuthenticated')
+								auth0.isAuthenticated()
+									.then((isAuthenticated) => {
+										if (isAuthenticated) {
+											alertMessage('Authenticated!')
+										} else {
+											// const redirect_uri = `${window.originalWindow.location.origin}${window.originalWindow.location.pathname}`
+											const redirect_uri = window.originalWindow.location.href
+											alertMessage(`About to loginWithRedirect to ${redirect_uri}`)
+											auth0.loginWithRedirect({ redirect_uri })
+												// .then(() => alertMessage(`Done logging in, about to redirect to ${redirect_uri}`))
+												// .catch((error) => alertMessage(error, 'error'))
+											window = window.originalWindow
+										}
+									})
+							})
+					})
+				})({
+					originalWindow: window,
+					location: {
+						assign: (url) => {
+							alertMessage(`Assigning ${url}`)
+							const $div = document.getElementById('testLinkWriterDiv')
+							const linkNode = document.createElement('A')
+							linkNode.setAttribute('href', url)
+							linkNode.setAttribute('target', '_self')
+							linkNode.innerHTML = 'Click me'
+							$div.appendChild(linkNode)
+							const event = document.createEvent('HTMLEvents')
+							event.initEvent('click', true, false)
+							linkNode.dispatchEvent(event)
+						}
+					}
+				})
+			}
 		})
 	</script>
 </body>
