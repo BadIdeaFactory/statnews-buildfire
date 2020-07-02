@@ -1,0 +1,21 @@
+{
+  "author": "Bad Idea Factory",
+  "pluginName": "STAT News",
+  "pluginDescription": "Reading STAT News and STAT News Plus.",
+  "supportEmail": "biffuddotcom@biffud.com",
+  "control": {
+    "content": {
+      "enabled": false
+    },
+    "design": {
+      "enabled": false
+    },
+    "settings": {
+      "enabled": true
+    }
+  },
+  "widget": {
+  },
+  "features": [],
+  "languages": ["en"]
+}

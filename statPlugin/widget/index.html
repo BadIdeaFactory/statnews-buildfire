@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<!-- The BuildFire JS library is required. -->
+	<script src="../../../scripts/buildfire.min.js"></script>
+	<!-- The Auth0 SPA library is used for authentication negotiation. -->
+	<script src="https://cdn.auth0.com/js/auth0-spa-js/1.9/auth0-spa-js.production.js"></script>
+	<!-- DayJS used for date render -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.8.28/dayjs.min.js"></script>
+	<style type="text/css">
+		@font-face{font-family:Circular;src:url(./fonts/Circular-Book.woff2) format("woff2"),url(./fonts/Circular-Book.woff) format("woff");font-style:normal;font-weight:400}
+		@font-face{font-family:Circular;src:url(./fonts/CircularStd-Medium.woff2) format("woff2"),url(./fonts/CircularStd-Medium.woff) format("woff");font-style:normal;font-weight:500}
+		@font-face{font-family:Circular;src:url(./fonts/Circular-Black.woff2) format("woff2"),url(./fonts/Circular-Black.woff) format("woff");font-style:normal;font-weight:900}
+		@font-face{font-family:Baskerville-eText;src:url(./fonts/BaskervilleeText.woff2) format("woff2"),url(./fonts/BaskervilleeText.woff) format("woff");font-style:normal;font-weight:400}
+		@font-face{font-family:Baskerville-eText;src:url(./fonts/BaskervilleeText-Bold.woff2) format("woff2"),url(./fonts/BaskervilleeText-Bold.woff) format("woff");font-style:normal;font-weight:700}
+		@font-face{font-family:Baskerville-eText;src:url(./fonts/BaskervilleeText-BoldItalic.woff2) format("woff2"),url(./fonts/BaskervilleeText-BoldItalic.woff) format("woff");font-style:italic;font-weight:700}
+		@font-face{font-family:Baskerville-eText;src:url(./fonts/BaskervilleeText-Italic.woff2) format("woff2"),url(./fonts/BaskervilleeText-Italic.woff) format("woff");font-style:italic;font-weight:400}
+		@font-face{font-family:FuturaND;src:url(./fonts/FuturaND-Medium.woff2) format("woff2"),url(./fonts/FuturaND-Medium.woff) format("woff");font-style:normal;font-weight:500}
+
+		html,body {
+			margin: 0;
+			padding: 0;
+			font-family: Circular, sans-serif;
+			color: black;
+		}
+
+		/* Font override because BuildFire is extremely aggressive with its mass font declaration. */
+		* {
+			font-family: Circular, sans-serif;
+		}
+
+		header {
+			background-color: #1fadb6;
+			height: 60px;
+			line-height: 28px;
+			color: white;
+			transition: color 200ms ease, background-color 200ms ease;
+
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			align-content: center;
+		}
+
+		.authenticated header {
+			background-color: white;
+			color: black;
+			border: 2px solid black;
+		}
+
+		#header__logo {
+			width: 100%;
+			height: 28px;
+			cursor: pointer;
+			margin: 1em;
+		}
+
+		#header__logo--standard {
+			height: 100%;
+		}
+		#header__logo--plus {
+			height: 100%;
+		}
+
+		#header__nav {
+			font-size: 0.9em;
+			font-weight: bold;
+			margin: 0.5em;
+		}
+
+		#login-button,
+		#logout-button {
+			font-weight: inherit;
+			color: inherit;
+		}
+
+		#banner {
+			padding: 1em;
+			background-color: #ffd;
+		}
+			#banner:empty {
+				display: none;
+			}
+			.banner--success {
+				color: #00b500;
+			}
+			.banner--error {
+				color: #ec0000;
+			}
+
+		main {
+			transition: opacity 200ms ease;
+		}
+			.loading main {
+				opacity: 0;
+			}
+
+		.default-hide,
+		.uninitialized .hide-uninitialized,
+		.initialized .hide-initialized,
+		.unauthenticated .hide-unauthenticated,
+		.authenticated .hide-authenticated {
+			display: none;
+		}
+
+		.default-show,
+		.uninitialized .show-uninitialized,
+		.initialized .show-initialized,
+		.unauthenticated .show-unauthenticated,
+		.authenticated .show-authenticated {
+			display: block;
+		}
+
+		.loader {
+			opacity: 0;
+			transition: opacity 100ms ease;
+
+			position: absolute;
+			/* top: -9px; */
+			top: 60px;
+			left: 50%;
+			margin-left: -40px;
+		}
+		.loading .loader {
+			opacity: 0.7;
+		}
+
+		/* Loading spinner. CC0 from https://loading.io/css/ */
+		.loader--ellipsis{display:inline-block;position:relative;width:80px;height:80px}.loader--ellipsis div{position:absolute;top:33px;width:13px;height:13px;border-radius:50%;background:#fff;animation-timing-function:cubic-bezier(0,1,1,0);transition:background-color 100ms ease;}.loader--ellipsis div:nth-child(1){left:8px;animation:loader--ellipsis1 .6s infinite}.loader--ellipsis div:nth-child(2){left:8px;animation:loader--ellipsis2 .6s infinite}.loader--ellipsis div:nth-child(3){left:32px;animation:loader--ellipsis2 .6s infinite}.loader--ellipsis div:nth-child(4){left:56px;animation:loader--ellipsis3 .6s infinite}@keyframes loader--ellipsis1{0%{transform:scale(0)}100%{transform:scale(1)}}@keyframes loader--ellipsis3{0%{transform:scale(1)}100%{transform:scale(0)}}@keyframes loader--ellipsis2{0%{transform:translate(0,0)}100%{transform:translate(24px,0)}}
+		.loader--ring{transform:scale(0.4);display:inline-block;position:relative;width:80px;height:80px}.loader--ring div{box-sizing:border-box;display:block;position:absolute;width:64px;height:64px;margin:8px;border:8px solid #fff;border-radius:50%;animation:loader--ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;border-color:#fff transparent transparent transparent;transition:border-color 100ms ease;}.loader--ring div:nth-child(1){animation-delay:-0.45s}.loader--ring div:nth-child(2){animation-delay:-0.3s}.loader--ring div:nth-child(3){animation-delay:-0.15s}@keyframes loader--ring{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+		.loader--dual-ring{transform:scale(0.4);display:inline-block;width:80px;height:80px}.loader--dual-ring:after{content:" ";display:block;width:64px;height:64px;margin:8px;border-radius:50%;border:6px solid #fff;border-color:#fff transparent #fff transparent;animation:loader--dual-ring 1.2s linear infinite;transition:border-color 100ms ease;}@keyframes loader--dual-ring{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+
+		#loader .loader--ellipsis div{background:#000;}
+		#loader .loader--ring div{border:8px solid #000;border-color:#000 transparent transparent transparent}
+		#loader .loader--dual-ring:after{border:6px solid #000;border-color:#000 transparent #000 transparent;}
+
+		.article-index {
+			margin: 0;
+			padding: 0;
+		}
+
+		.article__category > span {
+			border-bottom: 1px solid #1fadb6;
+			letter-spacing: 2px;
+			font-weight: 400;
+			font-size: 9px;
+			text-transform: uppercase;
+			position: relative;
+			color: #1fadb6;
+			padding-bottom: 2px;
+		}
+		.article__category * {
+			font-family: Circular, sans-serif;
+		}
+
+		.article__title {
+			font-size: 22.5px;
+			line-height: 1.2;
+			font-weight: 500;
+			letter-spacing: 0;
+		}
+		.article__title * {
+			font-family: Circular, sans-serif;
+		}
+
+		.article__meta {
+			font-size: 10px;
+			font-weight: 400;
+			letter-spacing: 1.25px;
+			line-height: 13px;
+		}
+
+		.article__meta__author-name,
+		.article__meta__date {
+			text-transform: uppercase;
+		}
+
+		.article__meta__date {
+			white-space: nowrap
+		}
+
+		.article-summary {
+			position: relative;
+			overflow: hidden;
+			margin: 0.25em 0;
+			cursor: pointer;
+			background-repeat: no-repeat;
+			background-position: top center;
+			background-size: cover;
+		}
+
+		.article-summary--read {
+			opacity: 0.5;
+		}
+
+		.article-summary .article__body {
+			padding: 40% 20px 14px;
+			background-image: linear-gradient(transparent, rgba(0, 0, 0, .93) 75%, rgba(0, 0, 0, .96));
+		}
+
+		.article-summary .article__category {
+			margin-bottom: 4px;
+		}
+
+		.article-summary .article__title {
+			margin-bottom: 13px;
+		}
+		.article-summary .article__title > span {
+			color: #fff;
+			text-shadow: 0 1px 1px #000;
+		}
+
+		.article-summary .article__meta * {
+			font-family: Baskerville-eText, Baskerville, Garamond, serif;
+			color: #ddd;
+			text-shadow: 0 1px 1px #000;
+		}
+
+		.article-summary .article__plus-preview {
+			content: "";
+			display: block;
+			position: absolute;
+			top: 70px;
+			right: -35px;
+			width: 130px;
+			height: 29px;
+			padding-top: 5px;
+			padding-right: 2px;
+			padding-left: 0;
+			transform: rotate(45deg);
+			transform-origin: right top;
+			background: rgba(0,0,0,.666);
+			color: #fff;
+			text-align: center;
+			text-transform: uppercase;
+		}
+
+		.article-summary .article__plus-preview .logo-stat-plus--white {
+			display: block;
+			position: absolute;
+			top: -.5px;
+			right: 0;
+			bottom: 0;
+			left: 29px;
+			width: auto;
+			height: 13px;
+			margin: 8px auto;
+		}
+
+		.article {
+			padding: 1em;
+		}
+
+		.article .article__title {
+			margin: 0.5em 0;
+		}
+
+		.article .article__content {
+			margin-top: 24px;
+			font-family: Baskerville-eText, Baskerville, Garamond,serif;
+			line-height: 1.5;
+		}
+		.article .article__content * {
+			font-family: Baskerville-eText,Baskerville,Garamond,serif;
+		}
+
+		.article__media {
+			margin: 1em 0;
+		}
+
+		.article__media__image {
+			display: block;
+			width: 100%;
+			height: auto;
+		}
+
+		.article__media__caption__credit {
+			font: normal 9px/1.5 Circular, sans-serif;
+			letter-spacing: 2px;
+			text-transform: uppercase;
+			color: #999
+		}
+
+		.logo-stat-news--white {
+			background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTc2IiBoZWlnaHQ9IjQ4IiB2aWV3Qm94PSIwIDAgMTc2IDQ4IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8ZyBjbGlwLXBhdGg9InVybCgjY2xpcDApIj4KPHBhdGggZD0iTTI1IDM2LjhDMjUuMyAzMi40IDIzLjIgMjguNiAxNi41IDI1LjhMMTEuNCAyMy43QzQuOCAyMC45IDIuNCAxNi41IDIuNyAxMS41QzMuMyAzLjYgOS43IC0wLjE5OTk5OSAxNy43IDAuNDAwMDAxQzIzLjIgMC44MDAwMDEgMjYuNiAyLjIgMjkuNiA0LjNMMjkuMSAxMUgyOC41QzI2LjQgNC41IDIyLjQgMi41IDE3LjYgMi4yQzEyLjUgMS45IDguNCA1LjEgOC4xIDkuNUM3LjggMTMuMyA5LjEgMTYuMyAxNC40IDE4LjZMMTguNCAyMC4zQzIzLjcgMjIuNSAzMSAyNS44IDMwLjQgMzQuN0MyOS44IDQyLjkgMjMuNyA0OC4xIDE0LjMgNDcuNUM4LjQgNDcuMSAzLjYgNDUuNSAwIDQyLjZMMC41IDM1SDEuMUM0LjEgNDQuNCA5LjIgNDUuMSAxMy43IDQ1LjRDMjEgNDUuOCAyNC43IDQxLjkgMjUgMzYuOFYzNi44Wk02NC41IDQxLjlDNjQuNSA0NC44IDY1LjUgNDUuNSA2OC41IDQ1LjVINzEuMVY0Ni42SDUyLjFWNDUuNEg1NC40QzU3LjcgNDUuNCA1OC43IDQ0LjcgNTguNyA0MS45VjMuNEg1MS4yQzQ1LjYgMy40IDQyLjkgNS44IDQyIDExLjFINDEuNFYxLjNIODEuNlYxMS4xSDgxLjFDODAuMyA1LjggNzcuNiAzLjQgNzEuOSAzLjRINjQuNFY0MS45SDY0LjVaTTE1OC41IDQxLjlDMTU4LjUgNDQuOCAxNTkuNSA0NS41IDE2Mi41IDQ1LjVIMTY1LjFWNDYuNkgxNDYuMVY0NS40SDE0OC40QzE1MS43IDQ1LjQgMTUyLjcgNDQuNyAxNTIuNyA0MS45VjMuNEgxNDUuMkMxMzkuNiAzLjQgMTM2LjkgNS44IDEzNiAxMS4xSDEzNS40VjEuM0gxNzUuNlYxMS4xSDE3NUMxNzQuMiA1LjggMTcxLjUgMy40IDE2NS44IDMuNEgxNTguM1Y0MS45SDE1OC41Wk0xMTYuNCAwSDExNy4xTDEyNC4xIDQyLjJDMTI0LjcgNDQuMyAxMjUuOCA0NS41IDEyOCA0NS41SDEyOS4zTDEyOS4xIDQ2LjZIMTEzLjNMMTEzLjUgNDUuNEgxMTQuN0MxMTYuOSA0NS40IDExOC40IDQ0LjcgMTE4IDQyLjdMMTE2IDMwLjNIOTkuOUw5NS4yIDM3LjhDOTEuMSA0NC44IDkyIDQ1LjQgOTYuMSA0NS40SDk3TDk2LjkgNDYuNkg4My42TDgzLjggNDUuNEg4NC40Qzg3LjUgNDUuNCA4OC42IDQ0LjQgOTIuNCAzOC41TDExNi40IDBWMFpNMTAyLjMgMjYuNkgxMTUuNUwxMTIuOCAxMEwxMDIuMyAyNi42WiIgZmlsbD0id2hpdGUiLz4KPC9nPgo8ZGVmcz4KPGNsaXBQYXRoIGlkPSJjbGlwMCI+CjxyZWN0IHdpZHRoPSIxNzUuNiIgaGVpZ2h0PSI0Ny41NDY5IiBmaWxsPSJ3aGl0ZSIvPgo8L2NsaXBQYXRoPgo8L2RlZnM+Cjwvc3ZnPgo=');
+			background-repeat: no-repeat;
+			background-size: contain;
+		}
+
+		.logo-stat-plus {
+			background-image: url('data:image/svg+xml;base64,PHN2ZyBpZD0iQXJ0d29yayIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2aWV3Qm94PSIwIDAgNjkzLjMgMTQ5LjIiPjxzdHlsZT4uc3Qwe2ZpbGw6IzFmYWRiNn08L3N0eWxlPjxwYXRoIGQ9Ik03Ny4xIDExMy41Yy45LTEzLjUtNS40LTI1LTI1LjgtMzMuNWwtMTUuNC02LjRjLTIwLTguNC0yNy40LTIxLjgtMjYuNC0zNy4xIDEuNi0yMy45IDIxLTM1LjQgNDUuMi0zMy44IDE2LjggMS4xIDI3IDUuNCAzNi4yIDExLjdsLTEuNCAyMC41LTEuNy0uMUM4MS41IDE1LjIgNjkuMiA4LjkgNTQuOCA4Yy0xNS41LTEtMjggOC45LTI4LjggMjItLjggMTEuNCAzIDIwLjYgMTkuMiAyNy42bDEyLjEgNS4yYzE2LjEgNi44IDM4LjQgMTYuNiAzNi42IDQzLjgtMS43IDI1LTIwLjMgNDAuNy00OC45IDM4LjgtMTcuOC0xLjItMzIuNS02LjEtNDMuNC0xNC44bDEuNi0yMy4yIDEuNy4xYzkuMiAyOC43IDI0LjYgMzAuNyAzOC40IDMxLjYgMjEuNCAxLjYgMzIuNy0xMC4xIDMzLjgtMjUuNnptMTE5LjggMTUuM2MwIDguOSAzIDExIDEyLjEgMTFoNy45djMuNWgtNTcuNnYtMy41aDcuMWM5LjkgMCAxMy0yIDEzLTEwLjhWMTEuOWgtMjIuN2MtMTcgMC0yNS4xIDcuMi0yNy44IDIzLjRoLTEuN1Y1LjZoMTIydjI5LjdoLTEuN2MtMi41LTE2LTEwLjYtMjMuNC0yNy44LTIzLjRIMTk3djExNi45em0yODUuNiAwYzAgOC45IDMgMTEgMTIuMSAxMWg3Ljl2My41SDQ0NXYtMy41aDcuMWM5LjkgMCAxMy0yIDEzLTEwLjhWMTEuOWgtMjIuN2MtMTcgMC0yNS4xIDcuMi0yNy44IDIzLjRoLTEuN1Y1LjZoMTIydjI5LjdoLTEuN2MtMi41LTE2LTEwLjYtMjMuNC0yNy44LTIzLjRoLTIyLjd2MTE2Ljl6TTM1NC40IDEuNmgyLjJMMzc4IDEyOS44YzEuNyA2LjQgNS4xIDkuOSAxMS44IDkuOWg0bC0uNSAzLjVoLTQ4bC41LTMuNWgzLjdjNi43IDAgMTEuMi0yIDEwLjEtOC4zbC02LjItMzcuNmgtNDguOWwtMTQuMyAyMi44Yy0xMi40IDIxLjEtOS42IDIzIDIuNyAyM2gyLjlsLS41IDMuNWgtNDAuNGwuNS0zLjVoMS43YzkuNCAwIDEyLjctMyAyNC40LTIwLjlMMzU0LjQgMS42em0tNDIuNyA4MC45aDQwTDM0My40IDMybC0zMS43IDUwLjV6Ii8+PHBhdGggY2xhc3M9InN0MCIgZD0iTTYxMS41IDEyLjdINjI3djEyMy43aC0xNS41eiIvPjxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik01NTcuNCA2Ni44aDEyMy43djE1LjVINTU3LjR6Ii8+PC9zdmc+');
+			background-repeat: no-repeat;
+			background-size: contain;
+		}
+
+		.logo-stat-plus--white {
+			background-image: url('data:image/svg+xml;base64,PHN2ZyBpZD0iQXJ0d29yayIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2aWV3Qm94PSIwIDAgNjc5LjUxIDE0NCI+PGRlZnM+PHN0eWxlPi5jbHMtMXtmaWxsOiNmZmY7fS5jbHMtMntmaWxsOiMxZmFkYjY7fTwvc3R5bGU+PC9kZWZzPjx0aXRsZT5TdGF0X1BsdXNfTG9nb19XaGl0ZTwvdGl0bGU+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNNzUuNDYgMTExLjg5Yy45NS0xMy40OS01LjQtMjUuMDMtMjUuNzctMzMuNDlsLTE1LjQ0LTYuNDVjLTIwLTguNDQtMjcuNDEtMjEuNzgtMjYuMzgtMzcuMDcgMS42MS0yMy44NyAyMS0zNS40IDQ1LjE3LTMzLjc3IDE2LjgxIDEuMTMgMjcgNS4zNyAzNi4xOSAxMS43M2wtMS4zNyAyMC41MS0xLjY4LS4xMUM3OS45IDEzLjU2IDY3LjY2IDcuMzMgNTMuMiA2LjRjLTE1LjQ3LTEtMjggOC45Mi0yOC44NCAyMi0uNzcgMTEuNDMgMyAyMC42NCAxOS4yNCAyNy42NGwxMi4xNSA1LjIxYzE2LjA5IDYuODMgMzguNCAxNi42MSAzNi41NiA0My44NC0xLjY5IDI1LTIwLjMxIDQwLjY4LTQ4Ljg4IDM4Ljc1LTE3LjgyLTEuMi0zMi41Mi02LjA4LTQzLjQyLTE0Ljc1bDEuNTYtMjMuMiAxLjY4LjExYzkuMjEgMjguNjUgMjQuNjEgMzAuNzEgMzguNCAzMS42NCAyMS41MSAxLjQ1IDMyLjc2LTEwLjI0IDMzLjgxLTI1Ljc1em0xMTkuODcgMTUuMzNjMCA4LjkzIDMgMTEgMTIuMTMgMTFoNy45NXYzLjU0aC01Ny42NXYtMy41NGg3LjA4YzkuOTQgMCAxMy0yIDEzLTEwLjc4VjEwLjI4aC0yMi43OGMtMTcgMC0yNS4xMSA3LjI1LTI3LjggMjMuNDJoLTEuNjlWNC4wNGgxMjJWMzMuN2gtMS42OWMtMi41My0xNi0xMC42Mi0yMy40Mi0yNy44LTIzLjQyaC0yMi43NXptMjg1LjYxIDBjMCA4LjkzIDMgMTEgMTIuMTMgMTFoNy45MnYzLjU0aC01Ny41OHYtMy41NGg3YzkuOTQgMCAxMy0yIDEzLTEwLjc4VjEwLjI4aC0yMi43NWMtMTcgMC0yNS4xMSA3LjI1LTI3LjggMjMuNDJoLTEuNjlWNC4wNGgxMjJWMzMuN2gtMS42OWMtMi41My0xNi0xMC42Mi0yMy40Mi0yNy44LTIzLjQyaC0yMi43NHpNMzUyLjg1IDBoMi4xOWwyMS4zNyAxMjguMjJjMS42OSA2LjQgNS4wNSA5Ljk0IDExLjc5IDkuOTRoNGwtLjUxIDMuNTRoLTQ4bC41MS0zLjU0aDMuNzFjNi43NCAwIDExLjE5LTIgMTAuMTEtOC4yNmwtNi4xNS0zNy41N2gtNDguOTZsLTE0LjI5IDIyLjgxYy0xMi40MiAyMS4xMi05LjY0IDIzIDIuNjYgMjNoMi44NmwtLjUxIDMuNTRoLTQwLjQybC41MS0zLjU0aDEuNjljOS40NCAwIDEyLjc1LTMgMjQuNDMtMjAuODl6bS00Mi43NiA4MC44OGg0MGwtOC4yOS01MC41NXoiLz48cGF0aCBjbGFzcz0iY2xzLTIiIGQ9Ik02MDkuOTIgMTEuMWgxNS41MXYxMjMuNjZoLTE1LjUxeiIvPjxwYXRoIGNsYXNzPSJjbHMtMiIgZD0iTTU1NS44NSA2NS4xN2gxMjMuNjZ2MTUuNTFINTU1Ljg1eiIvPjwvc3ZnPg==');
+			background-repeat: no-repeat;
+			background-size: contain;
+		}
+
+	</style>
+</head>
+<body class="uninitialized">
+
+	<div id="loader" class="loader">
+		<div class="loader--ring"><div></div><div></div><div></div><div></div></div>
+	</div>
+
+	<header>
+		<div id="header__logo">
+			<div id="header__logo--standard" class="logo-stat-news--white hide-authenticated"></div>
+			<div id="header__logo--plus" class="logo-stat-plus default-hide show-authenticated"></div>
+		</div>
+		<div id="header__nav">
+			<div id="header__nav__user" class="default-hide show-authenticated">
+				<button id="logout-button" class="btn btn-sm btn-link">
+					<span id="header__nav__user-name"></span>
+				</button>
+			</div>
+			<div id="header__nav__login" class="default-hide show-unauthenticated">
+				<button id="login-button" class="btn btn-sm btn-link">STAT+ subscriber? Log in!</button>
+			</div>
+		</div>
+	</header>
+
+	<div id="banner"></div>
+
+	<main id="main"></main>
+
+	<script type="text/javascript">
+		const stat = window.stat = Object.assign({}, window.stat || {}, {
+
+			constants: {
+				SETTINGS: {
+					AUTH_API: 'bif__stat-settings__auth-api',
+					FEED_API: 'bif__stat-settings__feed-api',
+				},
+			},
+
+			USE_CORS_PROXY: true,
+			// CORS_PROXY_URL: 'https://crossorigin.me/',
+			CORS_PROXY_URL: 'https://cors-anywhere.herokuapp.com/',
+
+			// These are set at definition time. If they won't be in the DOM when this object is defined,
+			// we'll want to have a `cacheElementReferences()` function.
+			el: {
+				$body: document.querySelector('body'),
+				$loader: document.getElementById('loader'),
+				$banner: document.getElementById('banner'),
+				$main: document.getElementById('main'),
+				$headerLogo: document.getElementById('header__logo'),
+				$loginButton: document.getElementById('login-button'),
+				$logoutButton: document.getElementById('logout-button'),
+				$headerNavUserName: document.getElementById('header__nav__user-name'),
+			},
+
+			util: {
+				/**
+				 * Runs the provided function when the document is fully loaded.
+				 *
+				 * @param {Function} fn The function to be run.
+				 */
+				ready: fn => {
+					if (document.readyState != 'loading') fn()
+					else document.addEventListener('DOMContentLoaded', fn)
+				},
+
+				addClass: (el, className) => el.classList.add(className),
+				removeClass: (el, className) => el.classList.remove(className),
+				hasClass: (el, className) => el.classList.contains(className),
+			},
+
+			logger: {
+				error: message => console.error(message),
+				log: message => console.log(message),
+			},
+
+			loader: {
+				start: process => {
+					stat.util.addClass(stat.el.$body, 'loading')
+
+					const loadingProcesses = (stat.el.$body.getAttribute('data-loading-processes') || '')
+						.split(',').filter(n => n)
+					if (!loadingProcesses.includes(process)) loadingProcesses.push(process)
+					stat.el.$body.setAttribute('data-loading-processes', loadingProcesses.join(','))
+				},
+				stop: process => {
+					const loadingProcesses = (stat.el.$body.getAttribute('data-loading-processes') || '')
+						.split(',').filter(n => n)
+						.filter(existingProcess => existingProcess !== process)
+					stat.el.$body.setAttribute('data-loading-processes', loadingProcesses.join(','))
+					if (loadingProcesses.length === 0) stat.util.removeClass(stat.el.$body, 'loading')
+				},
+			},
+
+			settings: {
+				cache: {},
+
+				/**
+				 * Fetches settings from the BuildFire datastore set by the control.
+				 *
+				 * @param   {String} tag Desired data object.
+				 * @returns {Promise}    Resolves with the settings object, rejects with an error message.
+				 */
+				fetch: (tag, { useCache = true } = {}) => new Promise((resolve, reject) => {
+					if (useCache && stat.settings.validate(tag, stat.settings.cache[tag])) resolve(stat.settings.cache[tag])
+
+					buildfire.datastore.get(tag, (err, data) => {
+						if (err) reject('Could not fetch settings.')
+						else {
+							const settings = data.data || {}
+							if (stat.settings.validate(tag, settings)) resolve(settings)
+							else reject('Settings failed validation.')
+						}
+					})
+				}),
+
+				validate: (tag, settings) => {
+					let isValid = true
+					switch (tag) {
+						case stat.constants.SETTINGS.AUTH_API:
+							isValid = settings && settings.domain && settings.clientId
+							break
+						case stat.constants.SETTINGS.FEED_API:
+							isValid = settings && settings.username && settings.password
+							break
+					}
+					return !!(isValid)
+				},
+			},
+
+			auth: {
+				cache: {},
+
+				getApiSettings: () => new Promise((resolve, reject) => {
+					stat.settings.fetch(stat.constants.SETTINGS.AUTH_API)
+						.then(settings => resolve(settings))
+						.catch(error => {
+							stat.logger.error(`getApiSettings failed while fetching API settings: ${error}`)
+							reject('Getting API settings failed.')
+						})
+				}),
+
+				getAuth0: () => new Promise((resolve, reject) => {
+					stat.auth.getApiSettings()
+						.then(settings => {
+							createAuth0Client({
+								domain: settings.domain,
+								client_id: settings.clientId,
+								// cacheLocation: 'localstorage',
+							})
+								.then(auth0 => resolve(auth0))
+								.catch(error => {
+									stat.logger.error(`getAuth0 failed while creating an Auth0 client: ${error}`)
+									reject('Creating an Auth0 client failed.')
+								})
+						})
+						.catch(error => {
+							stat.logger.error(`getAuth0 failed while fetching API settings: ${error}`)
+							reject('Getting an Auth0 object failed.')
+						})
+				}),
+
+				getUser: ({ useCache = true } = {}) => new Promise((resolve, reject) => {
+					if (stat.auth.cache.user && stat.auth.cache.user.sub) resolve(stat.auth.cache.user)
+
+					stat.auth.getAuth0()
+						.then(auth0 => {
+							auth0.getUser()
+								.then(user => {
+									stat.auth.cache.user = user
+									resolve(stat.auth.cache.user)
+								})
+								.catch(error => {
+									stat.logger.error(`getUser failed during auth0.getUser: ${error}`)
+									reject('Fetching user failed.')
+								})
+						})
+						.catch(error => {
+							stat.logger.error(`getUser failed during getAuth0: ${error}`)
+							reject('Fetching user failed.')
+						})
+				}),
+
+				checkAuthentication: () => new Promise((resolve, reject) => {
+					stat.auth.getAuth0()
+						.then(auth0 => {
+							auth0.isAuthenticated()
+								.then(isAuthenticated => resolve(isAuthenticated))
+								.catch(error => {
+									stat.logger.error(`checkAuthentication failed during auth0.isAuthenticated: ${error}`)
+									reject('Checking authentication failed.')
+								})
+						})
+						.catch(error => {
+							stat.logger.error(`checkAuthentication failed during getAuth0: ${error}`)
+							reject('Checking authentication failed.')
+						})
+				}),
+
+				login: () => new Promise((resolve, reject) => {
+					stat.auth.getAuth0()
+						.then(auth0 => {
+							auth0.loginWithPopup()
+								.then(() => resolve(true))
+								.catch(error => {
+									stat.logger.error(error)
+									stat.logger.error(`login failed during auth0.login: ${error}`)
+									reject('Logging in failed.')
+								})
+						})
+						.catch(error => {
+							stat.logger.error(`login failed during getAuth0: ${error}`)
+							reject('Logging in failed.')
+						})
+				}),
+
+				logout: () => new Promise((resolve, reject) => {
+					stat.auth.getAuth0()
+						.then(auth0 => {
+							stat.app.clearCache()
+							auth0.logout({ returnTo: window.location.href })
+							resolve(true)
+						})
+						.catch(error => {
+							stat.logger.error(`logout failed during getAuth0: ${error}`)
+							reject('Logging out failed.')
+						})
+				}),
+
+			},
+
+			feed: {
+				cache: { read: [] },
+
+				fetch: url => new Promise((resolve, reject) => {
+					const convertResponseToText = response => response.text()
+					const parseTextAsXml = str => new DOMParser().parseFromString(str, 'text/xml')
+					const getArticlesFromXml = xml => Array.from(xml.querySelectorAll('item'))
+					const cacheArticles = articles => {
+						stat.feed.cache.articles = articles.reduce((accumulator, article) => {
+							const newAccumulator = accumulator
+							const guid = article.querySelector('guid').textContent
+							newAccumulator[guid] = article
+							return newAccumulator
+						}, {})
+						return articles
+					}
+
+					fetch(`${stat.USE_CORS_PROXY ? stat.CORS_PROXY_URL : ''}${url}`)
+						.then(convertResponseToText)
+						.then(parseTextAsXml)
+						// If I abstracted this further, here is where we would stop (after parsing as XML)
+						.then(getArticlesFromXml)
+						.then(cacheArticles)
+						.then(stat.feed.renderPageArticleIndex)
+						.then(() => resolve(true))
+						.catch(err => {
+							stat.logger.error(err)
+							reject('Unable to fetch and/or process the feed.')
+						})
+				}),
+
+				fetchUnauthenticated: () => {
+					return stat.feed.fetch('https://www.statnews.com/feed')
+				},
+
+				fetchAuthenticated: () => {
+					// TODO: Pull credentials from cache
+					const credentials = {
+						username: '',
+						password: '',
+					}
+					// TODO: If the credentials are wrong, the `fetch()` will throw a 403. Need to watch for this!
+					return stat.feed.fetch(`https://www.statnews.com/feed/plus/?un=${credentials.username}&pw=${credentials.password}`)
+				},
+
+				renderPageArticleIndex: articles => {
+					stat.app.renderMain(stat.feed.renderArticleIndex(articles))
+
+					stat.app.recreateScrollPosition()
+
+					Array.from(stat.el.$main.querySelectorAll('.article-summary')).forEach(summary => {
+						summary.addEventListener('click', stat.app.handleArticleSummaryClick)
+					})
+				},
+
+				renderArticleIndex: articles => {
+					const renderedArticleSummaries = articles.map(stat.feed.renderArticleSummary).join('')
+					return `<div class="article-index">${renderedArticleSummaries}</div>`
+				},
+
+				renderArticleSummary: article => {
+					let isStatPlusPreview = false
+
+					const guid = article.querySelector('guid').textContent
+					const category = article.querySelector('category').textContent
+
+					let title = article.querySelector('title').textContent
+					if (title.startsWith('STAT Plus: ')) {
+						isStatPlusPreview = true
+						title = title.replace('STAT Plus: ', '')
+					}
+
+					let thumbnail = false
+					const thumbnailElements = article.getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'thumbnail')
+					if (thumbnailElements.length) thumbnail = thumbnailElements[0].getAttribute('url')
+
+					let author = false
+					const authorElements = article.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', 'creator')
+					if (authorElements.length) author = authorElements[0].textContent
+
+					const classNames = ['article-summary']
+					if (isStatPlusPreview) classNames.push('article-summary--stat-plus-preview')
+					if (stat.feed.isRead(guid)) classNames.push('article-summary--read')
+
+					let html = ''
+					html += `<article class="${classNames.join(' ')}" data-guid="${guid}" ${thumbnail ? `style="background-image:url('${thumbnail}')"` : ''}>`
+					if (isStatPlusPreview) {
+						html += `<div class="article__plus-preview"><span class="logo-stat-plus--white"></span></div>`
+					}
+					html += `<div class="article__body">`
+					if (category.toLowerCase() !== 'uncategorized') {
+						html += `<div class="article__category"><span>${category}</span></div>`
+					}
+					html += `<div class="article__title"><span>${title}</span></div>`
+					if (author) {
+						html += `<div class="article__meta"> \
+											<span class="article__meta__author"><em>By</em> <span class="article__meta__author-name">${author}</span></span> \
+										</div>`
+					}
+					html += '</div>'
+					html += '</article>'
+					return html
+				},
+
+				renderPageArticle: article => {
+					stat.app.renderMain(stat.feed.renderArticle(article))
+
+					// TODO: Replace this with proper back button
+					stat.el.$headerLogo.addEventListener('click', stat.app.handleLogoClickFromArticle)
+				},
+
+				renderArticle: article => {
+					let isStatPlusPreview = false
+
+					const guid = article.querySelector('guid').textContent
+					const category = article.querySelector('category').textContent
+					const description = article.querySelector('description').textContent
+					const date = dayjs(article.querySelector('pubDate').textContent).format('MMMM D, YYYY')
+
+					let title = article.querySelector('title').textContent
+					if (title.startsWith('STAT Plus: ')) {
+						isStatPlusPreview = true
+						title = title.replace('STAT Plus: ', '')
+					}
+
+					let media = {}
+					const mediaContentElement = article.getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'content')
+					if (mediaContentElement.length) {
+						const mediaCreditElement = mediaContentElement[0].getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'credit')
+						const mediaTextElement = mediaContentElement[0].getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'text')
+						media = {
+							url: mediaContentElement[0].getAttribute('url'),
+							credit: mediaCreditElement.length ? mediaCreditElement[0].textContent : '',
+							text: mediaTextElement.length ? mediaTextElement[0].textContent : ''
+						}
+					}
+
+					let author = false
+					const authorElements = article.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', 'creator')
+					if (authorElements.length) author = authorElements[0].textContent
+
+					// If, for some reason, content is missing, fall back on description.
+					const contentElements = article.getElementsByTagNameNS('http://purl.org/rss/1.0/modules/content/', 'encoded')
+					const content = (contentElements.length) ? contentElements[0].textContent : description
+
+					const classNames = ['article']
+					if (isStatPlusPreview) classNames.push('article--stat-plus-preview')
+
+					let html = ''
+					html += `<article class="${classNames.join(' ')}" data-guid="${guid}">`
+					if (isStatPlusPreview) {
+						html += `<div class="article__plus-preview"><span class="logo-stat-plus"></span></div>`
+					}
+					html += `<div class="article__body">`
+					if (category.toLowerCase() !== 'uncategorized') {
+						html += `<div class="article__category"><span>${category}</span></div>`
+					}
+					html += `<div class="article__title"><span>${title}</span></div>`
+					html += `<div class="article__meta"> \
+										<span class="article__meta__author"><em>By</em> <span class="article__meta__author-name">${author}</span></span> \
+										/ <span class="article__meta__date">${date}</span> \
+									</div>`
+					if (media.url) {
+						html += `<figure class="article__media"> \
+											<picture><img class="article__media__image" src="${media.url}" alt="${media.text}"></picture> \
+											<figcaption class="article__media__caption">
+												<cite class="article__media__caption__credit">${media.credit}</cite>
+											</figcaption>
+										</figure>`
+					}
+					html += `<div class="article__content">${content}</div>`
+					html += '</div>'
+					html += '</article>'
+					return html
+				},
+
+				readArticleByGuid: guid => {
+					const article = stat.feed.cache.articles[guid]
+					if (article) {
+						stat.analytics.trackView('article', { articleGuid: guid })
+						stat.feed.markAsRead(guid)
+						stat.feed.renderPageArticle(article)
+					}
+					else stat.logger.error(`Could not find article for GUID: ${guid}`)
+				},
+
+				isRead: guid => {
+					return stat.feed.cache.read.includes(guid)
+				},
+
+				markAsRead: guid => {
+					if (!stat.feed.isRead(guid)) stat.feed.cache.read.push(guid)
+				},
+
+				markAsUnread: guid => {
+					const readPosition = stat.feed.cache.read.indexOf(guid)
+					if (readPosition >= 0) stat.feed.cache.splice(readPosition, 1)
+				},
+			},
+
+			analytics: {
+				trackAction: (action, obj = {}) => {
+					const data = Object.assign({}, obj)
+					if (stat.auth.cache.user) data.userId = stat.auth.cache.user.sub
+					buildfire.analytics.trackAction(action, data)
+				},
+
+				trackView: (view, obj = {}) => {
+					const data = Object.assign({}, obj)
+					if (stat.auth.cache.user) data.userId = stat.auth.cache.user.sub
+					buildfire.analytics.trackView(view, data)
+				},
+			},
+
+			app: {
+				cache: { scrollPosition: 0 },
+
+				renderMain: html => {
+					stat.el.$main.innerHTML = html
+					stat.el.$body.scrollTo(0, 0)
+				},
+
+				clearCache: () => {
+					stat.feed.cache = { read: [] }
+					stat.auth.cache = {}
+					stat.app.cache = { scrollPosition: 0 }
+				},
+
+				cacheScrollPosition: () => {
+					stat.app.cache.scrollPosition = stat.el.$body.scrollTop
+				},
+
+				clearScrollPositionCache: () => {
+					stat.app.cache.scrollPosition = 0
+				},
+
+				recreateScrollPosition: () => {
+					stat.el.$body.scrollTo(0, stat.app.cache.scrollPosition)
+					stat.app.clearScrollPositionCache()
+				},
+
+				handleLoginButtonClick: e => {
+					e.preventDefault()
+
+					stat.loader.start('auth.login')
+					stat.auth.login()
+						.then(() => stat.app.initAuthenticated())
+						.finally(() => stat.loader.stop('auth.login'))
+				},
+
+				handleLogoutButtonClick: e => {
+					e.preventDefault()
+
+					stat.loader.start('auth.logout')
+					stat.auth.logout()
+						.catch(error => {
+							stat.loader.stop('auth.logout')
+							stat.logger.error(`Logging out threw an error: ${error}`)
+						})
+				},
+
+				handleLogoClickFromArticle: e => {
+					e.preventDefault()
+
+					stat.el.$headerLogo.removeEventListener('click', stat.app.handleLogoClickFromArticle)
+
+					// TODO: Don't do Object.values twice
+					if (stat.feed.cache.articles && Object.values(stat.feed.cache.articles).length) {
+						stat.feed.renderPageArticleIndex(Object.values(stat.feed.cache.articles))
+					}
+					else stat.init()
+				},
+
+				handleArticleSummaryClick: e => {
+					e.preventDefault()
+
+					stat.app.cacheScrollPosition()
+
+					const guid = e.currentTarget.getAttribute('data-guid')
+					stat.analytics.trackAction('clicked-article-summary', { articleGuid: guid })
+					stat.feed.readArticleByGuid(guid)
+				},
+
+				initAuthenticated: () => {
+					stat.util.addClass(stat.el.$body, 'authenticated')
+					stat.util.removeClass(stat.el.$body, 'unauthenticated')
+
+					stat.loader.start('getUser')
+					stat.auth.getUser()
+						.then(user => {
+							stat.el.$headerNavUserName.innerText = `Log out (${user.nickname})`
+						})
+						.catch(error => {
+							stat.el.$headerNavUserName.innerText = 'Log out'
+							stat.logger.error(`initAuthenticated had an error during getUser, falling back: ${error}`)
+						})
+						.finally(() => {
+							stat.loader.stop('getUser')
+							stat.el.$logoutButton.addEventListener('click', stat.app.handleLogoutButtonClick)
+						})
+
+					stat.loader.start('fetchAuthenticated')
+					stat.feed.fetchAuthenticated()
+						.finally(() => stat.loader.stop('fetchAuthenticated'))
+				},
+
+				initUnauthenticated: () => {
+					stat.util.addClass(stat.el.$body, 'unauthenticated')
+					stat.util.removeClass(stat.el.$body, 'authenticated')
+
+					stat.el.$loginButton.addEventListener('click', stat.app.handleLoginButtonClick)
+
+					stat.loader.start('fetchUnauthenticated')
+					stat.feed.fetchUnauthenticated()
+						.finally(() => stat.loader.stop('fetchUnauthenticated'))
+				},
+			},
+
+			init: () => {
+				stat.loader.start('init')
+
+				stat.auth.checkAuthentication()
+					.then((isAuthenticated) => {
+						if (isAuthenticated) stat.app.initAuthenticated()
+						else stat.app.initUnauthenticated()
+					})
+					.catch(error => {
+						stat.logger.error(`App initialization failed during checkAuthentication: ${error}`)
+						stat.app.initUnauthenticated()
+					})
+					.finally(() => {
+						stat.util.removeClass(stat.el.$body, 'uninitialized')
+						stat.util.addClass(stat.el.$body, 'initialized')
+						stat.loader.stop('init')
+					})
+			}
+		})
+
+		stat.util.ready(stat.init)
+	</script>
+</body>
+</html>
