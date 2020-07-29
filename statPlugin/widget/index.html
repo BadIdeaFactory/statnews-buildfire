@@ -438,8 +438,8 @@
 					stat.settings.fetch(stat.constants.SETTINGS.AUTH_API)
 						.then(settings => resolve(settings))
 						.catch(error => {
-							stat.logger.error(`getApiSettings failed while fetching API settings: ${error}`)
-							reject('Getting API settings failed.')
+							stat.logger.error(`auth.getApiSettings failed while fetching API settings: ${error}`)
+							reject('Getting auth API settings failed.')
 						})
 				}),
 
@@ -535,6 +535,15 @@
 			feed: {
 				cache: { read: [] },
 
+				getApiSettings: () => new Promise((resolve, reject) => {
+					stat.settings.fetch(stat.constants.SETTINGS.FEED_API)
+						.then(settings => resolve(settings))
+						.catch(error => {
+							stat.logger.error(`feed.getApiSettings failed while fetching API settings: ${error}`)
+							reject('Getting feed API settings failed.')
+						})
+				}),
+
 				fetch: url => new Promise((resolve, reject) => {
 					const convertResponseToText = response => response.text()
 					const parseTextAsXml = str => new DOMParser().parseFromString(str, 'text/xml')
@@ -563,18 +572,13 @@
 						})
 				}),
 
-				fetchUnauthenticated: () => {
+				fetchUnauthenticated: async () => {
 					return stat.feed.fetch('https://www.statnews.com/feed')
 				},
 
-				fetchAuthenticated: () => {
-					// TODO: Pull credentials from cache
-					const credentials = {
-						username: '',
-						password: '',
-					}
-					// TODO: If the credentials are wrong, the `fetch()` will throw a 403. Need to watch for this!
-					return stat.feed.fetch(`https://www.statnews.com/feed/plus/?un=${credentials.username}&pw=${credentials.password}`)
+				fetchAuthenticated: async () => {
+					const settings = await stat.feed.getApiSettings()
+					return stat.feed.fetch(`https://www.statnews.com/feed/plus/?un=${settings.username}&pw=${settings.password}`)
 				},
 
 				renderPageArticleIndex: articles => {
